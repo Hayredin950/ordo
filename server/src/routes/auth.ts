@@ -131,8 +131,11 @@ authRouter.post("/magic/verify", async (req, res) => {
 });
 
 // ---- OAuth ----------------------------------------------------------------
+// The callback route lives on THIS server, so the redirect URI must point at
+// the backend's public URL (apiUrl), while the post-auth redirect sends the
+// browser back to the web app (appUrl).
 const redirectUri = (provider: "github" | "google") =>
-  `${config.appUrl}/api/auth/${provider}/callback`;
+  `${config.apiUrl}/api/auth/${provider}/callback`;
 
 authRouter.get("/github", (req, res) => {
   if (!config.githubClientId) return res.status(501).json({ error: "GitHub sign-in is not configured" });

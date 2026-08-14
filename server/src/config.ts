@@ -6,6 +6,10 @@ export const config = {
     process.env.DATABASE_URL ??
     "postgres://ordo:ordo_dev_pw@localhost:5434/ordo",
   appUrl: process.env.APP_URL ?? "http://localhost:5173",
+  // Where THIS backend is publicly reachable — used for OAuth redirect URIs.
+  // In production set this to the backend URL (e.g. https://ordo-api.onrender.com);
+  // defaults to appUrl for local dev where frontend and API share a host.
+  apiUrl: process.env.API_URL ?? process.env.APP_URL ?? "http://localhost:5173",
   sessionDays: Number(process.env.SESSION_DAYS ?? 30),
 
   // Telegram (bot activates when a token is present)

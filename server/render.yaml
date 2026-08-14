@@ -1,0 +1,52 @@
+# Render Blueprint — one-click deploy of the Ordo API backend.
+# 1. Push this repo to GitHub.
+# 2. In Render: New → Blueprint → connect this repo (it auto-detects render.yaml).
+# 3. Fill in the secret env vars (marked sync: false) in the Render dashboard.
+# 4. After deploy, the service URL (e.g. https://ordo-api.onrender.com) is the
+#    value for API_URL and for the frontend's VITE_API_URL.
+
+services:
+  - type: web
+    name: ordo-api
+    runtime: node
+    repo: https://github.com/Hayredin950/goal-guardian-96
+    rootDir: server
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Connection string for the Neon database (see README / deployment guide).
+      - key: DATABASE_URL
+        sync: false
+      # The web app's public URL (CORS origin + OAuth post-login redirect).
+      - key: APP_URL
+        sync: false
+      # This backend's own public URL (OAuth callback). Defaults to APP_URL.
+      - key: API_URL
+        sync: false
+      # --- Optional integrations (all safe to leave empty) ---
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false
