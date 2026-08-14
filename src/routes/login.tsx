@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Compass, Github, Mail, Loader2 } from "lucide-react";
+import { Github, Mail, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -83,9 +83,11 @@ function LoginPage() {
       <Toaster />
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Compass className="size-6" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Ordo logo"
+            className="mx-auto mb-2 size-11 rounded-xl bg-white object-contain p-1"
+          />
           <CardTitle className="font-display text-2xl">Ordo</CardTitle>
           <CardDescription>Discipline, measured. Sign in to sync your accountability data.</CardDescription>
         </CardHeader>

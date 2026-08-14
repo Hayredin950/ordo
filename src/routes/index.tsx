@@ -12,7 +12,7 @@ import { CommunityView } from "@/components/ordo/CommunityView";
 import { OnboardingChecklist } from "@/components/ordo/OnboardingChecklist";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Undo2, Compass, LogIn, LogOut, Download, Bell } from "lucide-react";
+import { RotateCcw, Undo2, LogIn, LogOut, Download, Bell } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
@@ -71,9 +71,11 @@ function OrdoApp() {
       <header className="border-b border-border/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-5 py-4">
           <div className="flex items-center gap-2">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Compass className="size-5" />
-            </span>
+            <img
+              src="/logo.png"
+              alt="Ordo logo"
+              className="size-9 rounded-lg bg-white object-contain p-0.5"
+            />
             <div>
               <h1 className="font-display text-xl font-bold leading-none">Ordo</h1>
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
