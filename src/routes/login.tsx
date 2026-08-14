@@ -83,7 +83,7 @@ function LoginPage() {
       <Toaster />
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <img src="/logo.png" alt="Ordo" className="mx-auto mb-4 h-20 w-auto" />
+          <img src="/logo-icon.png" alt="Ordo logo" className="mx-auto mb-4 h-24 w-24" />
           <CardTitle className="font-display text-2xl">Ordo</CardTitle>
           <CardDescription>Discipline, measured. Sign in to sync your accountability data.</CardDescription>
         </CardHeader>

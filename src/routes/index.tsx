@@ -75,7 +75,10 @@ function OrdoApp() {
       <Toaster />
       <header className="border-b border-border/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-5 py-4">
-          <img src="/logo.png" alt="Ordo" className="h-10 w-auto" />
+          <a href="/" className="flex items-center gap-2.5">
+            <img src="/logo-icon.png" alt="Ordo logo" className="h-11 w-11" />
+            <span className="font-display text-xl font-bold tracking-tight">Ordo</span>
+          </a>
 
           <nav className="ml-auto flex flex-wrap gap-1">
             {TABS.map((t) => (
