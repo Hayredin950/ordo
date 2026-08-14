@@ -5,13 +5,19 @@ export const API_URL: string =
 
 const TOKEN_KEY = "ordo.session.v1";
 
+function hasStorage(): boolean {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  if (!hasStorage()) return null;
+  return window.localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string | null): void {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+  if (!hasStorage()) return;
+  if (token) window.localStorage.setItem(TOKEN_KEY, token);
+  else window.localStorage.removeItem(TOKEN_KEY);
 }
 
 export class ApiError extends Error {
