@@ -336,23 +336,56 @@ How strict should "partially done" be — free-form % entry, or fixed steps (25/
 
 Do you want the AI reflection to be purely observational, or should it be allowed to be blunt/critical in tone?]
 
-This project was built with [Lovable](https://lovable.dev).
+## What's implemented (all phases)
 
-## Build with Lovable
+**Phase 1 — MVP** ✅
+- Email/password, magic-link, GitHub + Google OAuth sign-in (env-gated)
+- Goals (year → day hierarchy), per-weekday routine templates, date overrides, daily log
+- Duplicate a day to another day / every weekday / any date range; simple weekly view + chart
+- Telegram bot: daily reminders, evening check-in with 0/25/50/75/100 buttons
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/6e177eeb-2452-49e2-96ae-73093d9894f7).
+**Phase 2 — Full hierarchy + richer tracking** ✅
+- Month/semester/year goal levels with automatic rollup; partial completion (%)
+- GitHub-style consistency heatmap, category breakdown, 3-week trend
+- Missed-task debt tracking + named reusable templates
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+**Phase 3 — Intelligence + polish** ✅
+- AI catch-up proposals + weekly reflection (Claude when `ANTHROPIC_API_KEY` is set, rule-based otherwise)
+- Slack as a second notification channel (per-user channel link, shared adapter)
+- Streaks (current + best), priority levels (must / nice)
+
+**Phase 4 — Multi-user & community** ✅
+- Public template library (publish, browse, copy)
+- Accountability pairing (see a peer's weekly % only), opt-in challenges + leaderboards
+- Focus timer, data export (JSON / CSV / iCal), onboarding checklist with progress bar
+
+**Also shipped (Sections H & I)** ✅
+- Year-in-review report, points, milestone badges, future-self letters (bot-delivered on deadline)
+- Version history / undo (last 30 snapshots), full account deletion, guest/demo mode (localStorage)
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+The app is a TanStack Start (React + Tailwind) frontend plus a Node.js + Express + PostgreSQL backend (`server/`).
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
+# 1. Postgres (docker)
+docker run -d --name ordo-postgres \
+  -e POSTGRES_PASSWORD=ordo_dev_pw -e POSTGRES_USER=ordo -e POSTGRES_DB=ordo \
+  -p 5434:5432 -v ordo_pgdata:/var/lib/postgresql/data postgres:16
+
+# 2. Backend (auth, bot, scheduler, AI coach)
+cd server
 npm i
-npm run dev
+cp .env.example .env   # optional: Telegram token, OAuth keys, Anthropic key
+npm run dev            # http://localhost:8787
+
+# 3. Frontend (in another terminal, from repo root)
+bun install
+bun run dev            # http://localhost:5173
 ```
+
+Signed out, the app behaves exactly like the original Phase 1 (all data in
+localStorage). Sign in and your data syncs per-user to Postgres, the Telegram
+bot becomes available, and the coach report is generated server-side.
+
+See [`server/README.md`](server/README.md) for the full backend docs.

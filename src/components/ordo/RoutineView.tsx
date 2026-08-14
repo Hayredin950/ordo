@@ -15,8 +15,11 @@ import {
 import { CategoryPill, Panel, PanelTitle } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Copy, Save } from "lucide-react";
+import { Plus, Trash2, Copy, Save, Globe } from "lucide-react";
 import { toast } from "sonner";
+import { PublicTemplates } from "./PublicTemplates";
+import { useAuth } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -27,9 +30,37 @@ export function RoutineView({
   state: OrdoState;
   update: (fn: (s: OrdoState) => OrdoState) => void;
 }) {
+  const { user } = useAuth();
   const [dayIdx, setDayIdx] = useState(new Date().getDay());
   const [templateName, setTemplateName] = useState("");
   const [rangeDays, setRangeDays] = useState(30);
+  const [publishing, setPublishing] = useState(false);
+
+  const publishDay = async () => {
+    if (!user) {
+      toast.info("Sign in to publish templates");
+      return;
+    }
+    const blocks = state.routine[dayIdx] ?? [];
+    if (!blocks.length) {
+      toast.error("This day has no blocks to publish");
+      return;
+    }
+    const name = templateName.trim() || `${DAYS[dayIdx]} routine`;
+    setPublishing(true);
+    try {
+      await apiFetch("/api/templates/publish", {
+        method: "POST",
+        json: { name, blocks: cloneBlocks(blocks) },
+      });
+      toast.success(`Published “${name}” to the shared library`);
+      setTemplateName("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not publish");
+    } finally {
+      setPublishing(false);
+    }
+  };
   const blocks = [...(state.routine[dayIdx] ?? [])].sort((a, b) => a.start.localeCompare(b.start));
 
   const setBlocks = (fn: (b: Block[]) => Block[]) =>
@@ -197,7 +228,7 @@ export function RoutineView({
         </Panel>
 
         <Panel>
-          <PanelTitle title="Template library" hint="Save any day, reuse it any time." />
+          <PanelTitle title="Template library" hint="Save any day, reuse it any time — or share it." />
           <div className="flex gap-2">
             <Input
               value={templateName}
@@ -221,6 +252,9 @@ export function RoutineView({
             >
               <Save className="size-4" />
             </Button>
+            <Button size="sm" variant="secondary" disabled={publishing} onClick={() => void publishDay()}>
+              <Globe className="size-4" /> Publish
+            </Button>
           </div>
           <div className="mt-3 space-y-2">
             {state.templates.map((t) => (
@@ -241,6 +275,13 @@ export function RoutineView({
             ))}
           </div>
         </Panel>
+
+        <PublicTemplates
+          dayIdx={dayIdx}
+          onApply={(blocks) => {
+            update((prev) => ({ ...prev, routine: { ...prev.routine, [dayIdx]: blocks } }));
+          }}
+        />
 
         <Panel>
           <PanelTitle title="Week at a glance" />

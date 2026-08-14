@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CATEGORIES,
   addDays,
@@ -9,11 +9,24 @@ import {
   type Goal,
   type OrdoState,
 } from "@/lib/ordo";
+import { useAuth } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 import { CategoryPill, Panel, PanelTitle } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Mail, Lock, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+type FutureLetter = {
+  id: string;
+  goal_title: string;
+  body: string;
+  deadline: string;
+  delivered: boolean;
+  created_at: string;
+};
 
 const PERIODS: Goal["period"][] = ["year", "semester", "month", "week", "day"];
 
@@ -40,9 +53,61 @@ export function GoalsView({
   state: OrdoState;
   update: (fn: (s: OrdoState) => OrdoState) => void;
 }) {
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [period, setPeriod] = useState<Goal["period"]>("week");
   const [category, setCategory] = useState<CategoryId>("study");
+
+  // Future-self letters
+  const [letters, setLetters] = useState<FutureLetter[] | null>(null);
+  const [letterTitle, setLetterTitle] = useState("");
+  const [letterDeadline, setLetterDeadline] = useState("");
+  const [letterBody, setLetterBody] = useState("");
+  const [letterBusy, setLetterBusy] = useState(false);
+
+  const loadLetters = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await apiFetch<{ letters: FutureLetter[] }>("/api/letters");
+      setLetters(res.letters);
+    } catch {
+      setLetters([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadLetters();
+  }, [loadLetters]);
+
+  const saveLetter = async () => {
+    if (!letterTitle.trim() || !letterDeadline || !letterBody.trim()) return;
+    setLetterBusy(true);
+    try {
+      await apiFetch("/api/letters", {
+        method: "POST",
+        json: { goal_title: letterTitle.trim(), body: letterBody.trim(), deadline: letterDeadline },
+      });
+      toast.success("Letter sealed — the bot delivers it on the deadline.");
+      setLetterTitle("");
+      setLetterDeadline("");
+      setLetterBody("");
+      void loadLetters();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save letter");
+    } finally {
+      setLetterBusy(false);
+    }
+  };
+
+  const deleteLetter = async (id: string) => {
+    try {
+      await apiFetch(`/api/letters/${id}`, { method: "DELETE", json: {} });
+      setLetters((ls) => (ls ? ls.filter((l) => l.id !== id) : ls));
+      toast.success("Letter deleted");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete letter");
+    }
+  };
 
   const add = () => {
     if (!title.trim()) return;
@@ -140,10 +205,63 @@ export function GoalsView({
         </Panel>
 
         <Panel>
-          <PanelTitle title="Future-self letter" hint="Sealed until the year goal's deadline." />
-          <p className="text-sm text-muted-foreground">
-            Written on Jan 1 · unlocks Dec 31. The bot delivers it the day the goal closes — win or lose.
-          </p>
+          <PanelTitle title="Future-self letter" hint="Sealed until the deadline, delivered by the bot — win or lose." />
+          {!user ? (
+            <p className="text-sm text-muted-foreground">
+              Sign in to write a letter to your future self. It stays sealed until the deadline you set, then the bot
+              delivers it — win or lose.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Input
+                  value={letterTitle}
+                  placeholder="Sealed for which goal? e.g. Ship Ordo"
+                  onChange={(e) => setLetterTitle(e.target.value)}
+                />
+                <Input
+                  value={letterDeadline}
+                  type="date"
+                  aria-label="Delivery date"
+                  onChange={(e) => setLetterDeadline(e.target.value)}
+                />
+                <Textarea
+                  value={letterBody}
+                  placeholder="What do you want to tell the person who reaches that day?"
+                  rows={4}
+                  onChange={(e) => setLetterBody(e.target.value)}
+                />
+                <Button
+                  className="w-full"
+                  disabled={letterBusy || !letterTitle.trim() || !letterDeadline || !letterBody.trim()}
+                  onClick={() => void saveLetter()}
+                >
+                  {letterBusy ? <Loader2 className="mr-1 size-4 animate-spin" /> : <Lock className="mr-1 size-4" />}
+                  Seal the letter
+                </Button>
+              </div>
+              <div className="space-y-2 border-t border-border pt-3">
+                {!letters?.length ? (
+                  <p className="text-sm text-muted-foreground">No letters sealed yet.</p>
+                ) : (
+                  letters.map((l) => (
+                    <div key={l.id} className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm">
+                      <Mail className="mt-0.5 size-4 shrink-0 text-primary" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{l.goal_title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          delivers {l.deadline} · {l.delivered ? "delivered ✓" : "sealed"}
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="icon" aria-label="Delete letter" onClick={() => void deleteLetter(l.id)}>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </Panel>
       </div>
     </div>

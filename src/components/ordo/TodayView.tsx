@@ -11,8 +11,12 @@ import {
 import { CategoryPill, Panel, PanelTitle, Ring, Stat } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Flame, AlertTriangle, Bell } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { TelegramPanel } from "./TelegramPanel";
+import { FocusTimer } from "./FocusTimer";
+import { useAuth } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 
 const STEPS = [0, 25, 50, 75, 100];
 
@@ -23,6 +27,7 @@ export function TodayView({
   state: OrdoState;
   update: (fn: (s: OrdoState) => OrdoState) => void;
 }) {
+  const { user } = useAuth();
   const [offset, setOffset] = useState(0);
   const day = addDays(new Date(), offset);
   const key = dateKey(day);
@@ -31,6 +36,21 @@ export function TodayView({
   const score = dayScore(state, day) ?? 0;
   const s = useMemo(() => streak(state), [state]);
   const debt = useMemo(() => missedDebt(state), [state]);
+
+  const proposeCatchUp = async () => {
+    if (!user) {
+      toast("Redistribution proposed", {
+        description: `Fit ${debt.length} missed block${debt.length > 1 ? "s" : ""} into the next 4 evenings without touching your must-do mornings.`,
+      });
+      return;
+    }
+    try {
+      const res = await apiFetch<{ proposal: string }>("/api/coach/catchup");
+      toast("Catch-up proposal", { description: res.proposal.replace(/<[^>]+>/g, "") });
+    } catch {
+      toast.error("Could not generate a proposal");
+    }
+  };
 
   const setPct = (blockId: string, pct: number) =>
     update((prev) => ({
@@ -158,36 +178,15 @@ export function TodayView({
             )}
           </div>
           {debt.length > 0 ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="mt-4 w-full"
-              onClick={() =>
-                toast("Redistribution proposed", {
-                  description: `Fit ${debt.length} missed block${debt.length > 1 ? "s" : ""} into the next 4 evenings without touching your must-do mornings.`,
-                })
-              }
-            >
+            <Button variant="secondary" size="sm" className="mt-4 w-full" onClick={() => void proposeCatchUp()}>
               Propose a catch-up plan
             </Button>
           ) : null}
         </Panel>
 
-        <Panel>
-          <PanelTitle title="Nudges" hint="Telegram-first, one shared notification service." />
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p>· 10 min before every must-do block</p>
-            <p>· Nag when a block's window closes unlogged</p>
-            <p>· Morning brief + evening check-in</p>
-          </div>
-          <Button
-            size="sm"
-            className="mt-4 w-full"
-            onClick={() => toast.success("Test nudge queued", { description: "Evening check-in: “How did the study session go?”" })}
-          >
-            <Bell className="mr-2 size-4" /> Send a test nudge
-          </Button>
-        </Panel>
+        <TelegramPanel />
+
+        <FocusTimer />
       </div>
     </div>
   );
