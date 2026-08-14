@@ -31,7 +31,12 @@ export const Route = createFileRoute("/")({
           "Plan your year down to the hour, log reality, and let the data do the nagging. Routines, streaks, heatmaps and coach reviews.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "/preview.png" },
+      { property: "og:image:type", content: "image/png" },
+      { property: "og:image:width", content: "1731" },
+      { property: "og:image:height", content: "909" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "/preview.png" },
     ],
   }),
   component: OrdoApp,
@@ -70,19 +75,7 @@ function OrdoApp() {
       <Toaster />
       <header className="border-b border-border/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <img
-              src="/logo.png"
-              alt="Ordo logo"
-              className="size-9 rounded-lg bg-white object-contain p-0.5"
-            />
-            <div>
-              <h1 className="font-display text-xl font-bold leading-none">Ordo</h1>
-              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                discipline, measured
-              </p>
-            </div>
-          </div>
+          <img src="/logo.png" alt="Ordo" className="h-10 w-auto" />
 
           <nav className="ml-auto flex flex-wrap gap-1">
             {TABS.map((t) => (
