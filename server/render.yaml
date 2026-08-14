@@ -9,7 +9,7 @@ services:
   - type: web
     name: ordo-api
     runtime: node
-    repo: https://github.com/Hayredin950/goal-guardian-96
+    repo: https://github.com/Hayredin950/ordo
     rootDir: server
     plan: free
     buildCommand: npm ci
