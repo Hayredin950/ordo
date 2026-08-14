@@ -16,7 +16,13 @@ import { generateWeeklyReport, proposeCatchUp } from "./ai/coach.js";
 
 const app = express();
 
-app.use(cors({ origin: config.appUrl, credentials: true }));
+app.use(
+  cors({
+    origin: config.appUrl,
+    credentials: true,
+    exposedHeaders: ["content-disposition"],
+  }),
+);
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 

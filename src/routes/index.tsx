@@ -3,7 +3,7 @@ import { useState } from "react";
 import { rangeScore, startOfWeek, type OrdoState } from "@/lib/ordo";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, downloadExport } from "@/lib/api";
 import { TodayView } from "@/components/ordo/TodayView";
 import { RoutineView } from "@/components/ordo/RoutineView";
 import { GoalsView } from "@/components/ordo/GoalsView";
@@ -61,6 +61,15 @@ function OrdoApp() {
       toast.error(err instanceof Error ? err.message : "Nothing to undo");
     } finally {
       setUndoBusy(false);
+    }
+  };
+
+  const handleExport = async (kind: "json" | "csv" | "ical") => {
+    try {
+      await downloadExport(kind);
+      toast.success("Export downloaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
     }
   };
 
@@ -123,27 +132,30 @@ function OrdoApp() {
                   <RotateCcw className="size-4" />
                 </Button>
                 <div className="flex items-center gap-1">
-                  <a
-                    href={`${import.meta.env["VITE_API_URL"] ?? "http://localhost:8787"}/api/export/json`}
+                  <button
+                    type="button"
+                    onClick={() => void handleExport("json")}
                     className="inline-flex items-center rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
                     title="Export JSON"
                   >
                     <Download className="size-4" />
-                  </a>
-                  <a
-                    href={`${import.meta.env["VITE_API_URL"] ?? "http://localhost:8787"}/api/export/csv`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleExport("csv")}
                     className="inline-flex items-center rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
                     title="Export CSV"
                   >
                     <span className="text-[10px] font-semibold">CSV</span>
-                  </a>
-                  <a
-                    href={`${import.meta.env["VITE_API_URL"] ?? "http://localhost:8787"}/api/export/ical`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleExport("ical")}
                     className="inline-flex items-center rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
                     title="Export iCal"
                   >
                     <span className="text-[10px] font-semibold">iCal</span>
-                  </a>
+                  </button>
                 </div>
                 <div className="hidden text-right sm:block">
                   <div className="max-w-32 truncate text-sm font-medium">{user.name || user.email}</div>

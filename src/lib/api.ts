@@ -57,6 +57,42 @@ export async function apiFetch<T = unknown>(
   return (await res.json()) as T;
 }
 
+const EXPORT_FILENAMES: Record<string, string> = {
+  json: "ordo-export.json",
+  csv: "ordo-log.csv",
+  ical: "ordo-routine.ics",
+};
+
+/** Fetch an authenticated export and trigger a browser download. */
+export async function downloadExport(kind: "json" | "csv" | "ical"): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}/api/export/${kind}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `Export failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, message);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = /filename="?([^";]+)"?/.exec(disposition);
+  const filename = match?.[1] ?? EXPORT_FILENAMES[kind] ?? "ordo-export";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export type HealthStatus = {
   ok: boolean;
   status: {
