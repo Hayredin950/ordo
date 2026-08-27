@@ -436,6 +436,28 @@ Providers** → enable GitHub and/or Google with their client id/secret. Both ar
 also described in [`supabase/config.toml`](supabase/config.toml), so
 `supabase config push` applies them for you.
 
+**The OAuth callback belongs to Supabase, not to this app.** Supabase brokers the
+whole flow, so the callback you register with the provider is
+
+```
+https://<your-project-ref>.supabase.co/auth/v1/callback
+```
+
+and _not_ a URL on your own domain. Pointing it at the app (or at a leftover API
+host) fails with `redirect_uri_mismatch` from Google or "The redirect_uri MUST
+match the registered callback URL" from GitHub. Set it in **GitHub → Settings →
+Developer settings → OAuth Apps → Authorization callback URL** and in **Google
+Cloud Console → Credentials → your OAuth client → Authorised redirect URIs**;
+Google's _Authorised JavaScript origins_ is a separate field and filling only
+that one is not enough. You can check what Supabase actually sends with
+
+```sh
+curl -sD - -o /dev/null \
+  "https://<your-project-ref>.supabase.co/auth/v1/authorize?provider=github"
+```
+
+— the `Location` header shows the `client_id` and `redirect_uri` in play.
+
 **On email.** Supabase's built-in SMTP is capped at two emails per hour for the
 whole project, so email confirmation is turned off in `config.toml` (otherwise
 the third signup in an hour silently fails) and magic links are unreliable until
@@ -526,8 +548,27 @@ Register it once per deployment:
 ```sh
 curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
   -d "url=https://<your-app>/api/telegram/webhook" \
-  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET" \
+  -d 'allowed_updates=["message","callback_query"]'
 ```
+
+Those are the only two update types the handler reads, so narrowing them keeps
+the function from waking for edits and channel posts. `getWebhookInfo` is the way
+to confirm what stuck.
+
+Optionally publish the command menu so it appears in Telegram's UI:
+
+```sh
+curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setMyCommands" \
+  -H 'content-type: application/json' \
+  -d '{"commands":[{"command":"today","description":"Today'"'"'s tasks"}]}'
+```
+
+**A bot cannot open a conversation.** Until a person presses Start (or sends any
+message) at `t.me/<your-bot>`, every `sendMessage` to them fails with
+`400 chat not found` — including reminders from the cron tick. The webhook still
+answers `200`, because a poison update must never be retried forever, so this
+failure is only visible in the runtime logs as `[telegram] sendMessage failed`.
 
 To link an account: generate a code from the Telegram panel on the Today view,
 then send `/link <code>` to the bot. Commands: `/start`, `/link`, `/today`,
@@ -551,9 +592,17 @@ runs — changing them later requires a rebuild, not just a redeploy.
 
 **If a deployment comes back `BLOCKED`:** on the Hobby plan Vercel refuses any
 deployment whose tip commit was authored by someone other than the account owner,
-and it reads that author from local git even for CLI deploys. Either commit under
-the account owner's identity, or deploy the prebuilt output from a directory with
-no git metadata:
+and it reads that author from local git even for CLI deploys. The fix is to commit
+under the account owner's identity —
+
+```sh
+git config user.name  "<vercel-account-owner>"
+git config user.email "<their-github-email>"
+```
+
+— which also means a branch whose tip is a foreign commit can still be landed by
+merging it with `--no-ff`, since the merge commit becomes the new tip. Failing
+that, deploy the prebuilt output from a directory with no git metadata:
 
 ```sh
 bun run build
