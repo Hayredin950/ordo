@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import * as db from "@/lib/db";
 import type { OrdoState } from "@/lib/ordo";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Circle } from "lucide-react";
@@ -22,10 +22,9 @@ export function OnboardingChecklist({ state }: { state: OrdoState }) {
 
   useEffect(() => {
     if (!user) return;
-    (async () => {
+    void (async () => {
       try {
-        const res = await apiFetch<{ linked: unknown }>("/api/telegram/status");
-        setTelegramLinked(Boolean(res.linked));
+        setTelegramLinked(Boolean(await db.telegramLink()));
       } catch {
         setTelegramLinked(false);
       }
@@ -35,12 +34,12 @@ export function OnboardingChecklist({ state }: { state: OrdoState }) {
   const done: Record<StepKey, boolean> = { goal_set: goalSet, routine_set: routineSet, telegram_linked: telegramLinked };
   const completed = STEPS.filter((s) => done[s.key]).length;
 
-  // Report newly-completed steps to the server (merges true values only).
+  // Record newly-completed steps; set_onboarding only ever flips flags to true.
   useEffect(() => {
     if (!user || completed === 0) return;
     const payload: Partial<Record<StepKey, boolean>> = {};
     for (const s of STEPS) if (done[s.key]) payload[s.key] = true;
-    void apiFetch("/api/onboarding", { method: "POST", json: payload }).catch(() => {});
+    void db.setOnboarding(payload).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, goalSet, routineSet, telegramLinked]);
 

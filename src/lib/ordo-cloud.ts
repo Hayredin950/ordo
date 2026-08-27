@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useOrdo, type OrdoState } from "./ordo";
 import { useAuth } from "./auth";
-import { apiFetch } from "./api";
+import { loadState, saveState } from "./db";
 
 /**
- * useOrdoCloud — same API as useOrdo, but syncs to the backend when a user is
- * signed in. Signed out, it behaves exactly like the original local-only hook.
+ * useOrdoCloud — same API as useOrdo, but syncs the document to Postgres when a
+ * user is signed in. Signed out it behaves exactly like the local-only hook.
+ * Writes go through the save_state() function, which also maintains the undo
+ * history, so the client never writes user_state directly.
  */
 export function useOrdoCloud() {
   const { state, update, reset } = useOrdo();
@@ -18,22 +20,22 @@ export function useOrdoCloud() {
 
   const saveNow = useCallback(async (s: OrdoState) => {
     try {
-      await apiFetch("/api/state", { method: "PUT", json: { state: s } });
+      await saveState(s);
     } catch (err) {
       console.error("[sync] save failed", err);
     }
   }, []);
 
-  // Initial load: prefer server state over local, adopt local if server empty.
+  // Initial load: prefer stored state over local, adopt local if none exists.
   useEffect(() => {
     if (!token || initializedRef.current) return;
     initializedRef.current = true;
 
-    (async () => {
+    void (async () => {
       try {
-        const res = await apiFetch<{ state: OrdoState | null }>("/api/state");
-        if (res.state) {
-          update(() => res.state!);
+        const remote = await loadState();
+        if (remote) {
+          update(() => remote);
         } else if (stateRef.current) {
           await saveNow(stateRef.current);
         }
@@ -42,6 +44,11 @@ export function useOrdoCloud() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // Signing out ends the session; a later sign-in must re-sync from scratch.
+  useEffect(() => {
+    if (!token) initializedRef.current = false;
   }, [token]);
 
   // Debounced save on every change once initialized.

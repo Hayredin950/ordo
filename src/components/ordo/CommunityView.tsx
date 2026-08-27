@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import * as db from "@/lib/db";
+import type { BoardRow, Challenge, Peer } from "@/lib/db";
 import { Panel, PanelTitle } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,20 +20,6 @@ import {
 import { UserPlus, Users, Trophy, Trash2, ChevronDown, ChevronUp, Loader2, Flag } from "lucide-react";
 import { toast } from "sonner";
 
-type Peer = { id: string; name: string; email: string; weekly: number | null };
-
-type Challenge = {
-  id: string;
-  name: string;
-  starts_on: string;
-  ends_on: string;
-  owner_id: string;
-  members: number;
-  joined: boolean;
-};
-
-type BoardRow = { user_id: string; name: string; score: number };
-
 export function CommunityView() {
   const { user, logout } = useAuth();
 
@@ -44,8 +31,7 @@ export function CommunityView() {
   const loadPeers = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await apiFetch<{ peers: Peer[] }>("/api/pairs");
-      setPeers(res.peers);
+      setPeers(await db.listPeers());
     } catch {
       setPeers([]);
     }
@@ -59,7 +45,7 @@ export function CommunityView() {
     if (!pairEmail.trim()) return;
     setPairBusy(true);
     try {
-      await apiFetch("/api/pairs", { method: "POST", json: { email: pairEmail.trim() } });
+      await db.pairWithEmail(pairEmail.trim());
       toast.success("Pairing added — they can see your weekly %, nothing else.");
       setPairEmail("");
       void loadPeers();
@@ -72,7 +58,7 @@ export function CommunityView() {
 
   const removePair = async (peerId: string) => {
     try {
-      await apiFetch(`/api/pairs/${peerId}`, { method: "DELETE", json: {} });
+      await db.unpair(peerId);
       setPeers((ps) => (ps ? ps.filter((p) => p.id !== peerId) : ps));
       toast.success("Pairing removed");
     } catch (err) {
@@ -91,8 +77,7 @@ export function CommunityView() {
   const loadChallenges = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await apiFetch<{ challenges: Challenge[] }>("/api/challenges");
-      setChallenges(res.challenges);
+      setChallenges(await db.listChallenges());
     } catch {
       setChallenges([]);
     }
@@ -105,10 +90,7 @@ export function CommunityView() {
   const createChallenge = async () => {
     if (!chName.trim()) return;
     try {
-      await apiFetch("/api/challenges", {
-        method: "POST",
-        json: { name: chName.trim(), days: Math.max(7, Math.min(90, chDays)) },
-      });
+      await db.createChallenge(chName.trim(), Math.max(7, Math.min(90, chDays)));
       toast.success("Challenge created — you're the first member.");
       setChName("");
       void loadChallenges();
@@ -119,7 +101,7 @@ export function CommunityView() {
 
   const joinChallenge = async (id: string) => {
     try {
-      await apiFetch(`/api/challenges/${id}/join`, { method: "POST", json: {} });
+      await db.joinChallenge(id);
       toast.success("Joined. Rank is by completion % — opt-in, no pressure.");
       void loadChallenges();
       setOpenBoard(id);
@@ -138,9 +120,7 @@ export function CommunityView() {
     setBoardBusy(true);
     setBoard(null);
     try {
-      const res = await apiFetch<{ leaderboard: BoardRow[]; myRank: number | null }>(
-        `/api/challenges/${id}/leaderboard`,
-      );
+      const res = await db.challengeLeaderboard(id, user?.id ?? null);
       setBoard({ rows: res.leaderboard, myRank: res.myRank });
     } catch {
       setBoard(null);
@@ -155,7 +135,7 @@ export function CommunityView() {
   const deleteAccount = async () => {
     setDeleting(true);
     try {
-      await apiFetch("/api/account", { method: "DELETE", json: {} });
+      await db.deleteAccount();
       toast.success("Account and all data deleted.");
       await logout();
     } catch (err) {

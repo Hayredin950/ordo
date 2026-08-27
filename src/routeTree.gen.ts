@@ -11,6 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiCoachCatchupRouteImport } from './routes/api/coach/catchup'
+import { Route as ApiCoachWeeklyRouteImport } from './routes/api/coach/weekly'
+import { Route as ApiCronTickRouteImport } from './routes/api/cron/tick'
+import { Route as ApiTelegramWebhookRouteImport } from './routes/api/telegram/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +27,98 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCoachCatchupRoute = ApiCoachCatchupRouteImport.update({
+  id: '/api/coach/catchup',
+  path: '/api/coach/catchup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCoachWeeklyRoute = ApiCoachWeeklyRouteImport.update({
+  id: '/api/coach/weekly',
+  path: '/api/coach/weekly',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronTickRoute = ApiCronTickRouteImport.update({
+  id: '/api/cron/tick',
+  path: '/api/cron/tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTelegramWebhookRoute = ApiTelegramWebhookRouteImport.update({
+  id: '/api/telegram/webhook',
+  path: '/api/telegram/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/coach/catchup': typeof ApiCoachCatchupRoute
+  '/api/coach/weekly': typeof ApiCoachWeeklyRoute
+  '/api/cron/tick': typeof ApiCronTickRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/coach/catchup': typeof ApiCoachCatchupRoute
+  '/api/coach/weekly': typeof ApiCoachWeeklyRoute
+  '/api/cron/tick': typeof ApiCronTickRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/coach/catchup': typeof ApiCoachCatchupRoute
+  '/api/coach/weekly': typeof ApiCoachWeeklyRoute
+  '/api/cron/tick': typeof ApiCronTickRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/api/health'
+    | '/api/coach/catchup'
+    | '/api/coach/weekly'
+    | '/api/cron/tick'
+    | '/api/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login'
-  id: '__root__' | '/' | '/login'
+  to:
+    | '/'
+    | '/login'
+    | '/api/health'
+    | '/api/coach/catchup'
+    | '/api/coach/weekly'
+    | '/api/cron/tick'
+    | '/api/telegram/webhook'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/api/health'
+    | '/api/coach/catchup'
+    | '/api/coach/weekly'
+    | '/api/cron/tick'
+    | '/api/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
+  ApiHealthRoute: typeof ApiHealthRoute
+  ApiCoachCatchupRoute: typeof ApiCoachCatchupRoute
+  ApiCoachWeeklyRoute: typeof ApiCoachWeeklyRoute
+  ApiCronTickRoute: typeof ApiCronTickRoute
+  ApiTelegramWebhookRoute: typeof ApiTelegramWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +137,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/coach/catchup': {
+      id: '/api/coach/catchup'
+      path: '/api/coach/catchup'
+      fullPath: '/api/coach/catchup'
+      preLoaderRoute: typeof ApiCoachCatchupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/coach/weekly': {
+      id: '/api/coach/weekly'
+      path: '/api/coach/weekly'
+      fullPath: '/api/coach/weekly'
+      preLoaderRoute: typeof ApiCoachWeeklyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/tick': {
+      id: '/api/cron/tick'
+      path: '/api/cron/tick'
+      fullPath: '/api/cron/tick'
+      preLoaderRoute: typeof ApiCronTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/telegram/webhook': {
+      id: '/api/telegram/webhook'
+      path: '/api/telegram/webhook'
+      fullPath: '/api/telegram/webhook'
+      preLoaderRoute: typeof ApiTelegramWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
+  ApiHealthRoute: ApiHealthRoute,
+  ApiCoachCatchupRoute: ApiCoachCatchupRoute,
+  ApiCoachWeeklyRoute: ApiCoachWeeklyRoute,
+  ApiCronTickRoute: ApiCronTickRoute,
+  ApiTelegramWebhookRoute: ApiTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

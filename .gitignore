@@ -17,10 +17,10 @@ dist-ssr
 .nitro
 *.local
 
-# Server
-server/node_modules
-server/dist
-server/.env
+# Env
+.env
+.env.*
+!.env.example
 
 # Wrangler / Cloudflare
 .wrangler/

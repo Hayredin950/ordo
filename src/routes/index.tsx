@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { rangeScore, startOfWeek, type OrdoState } from "@/lib/ordo";
+import { rangeScore, startOfWeek } from "@/lib/ordo";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
 import { useAuth } from "@/lib/auth";
-import { apiFetch, downloadExport } from "@/lib/api";
+import { undoState } from "@/lib/db";
+import { downloadExport, type ExportKind } from "@/lib/export";
 import { TodayView } from "@/components/ordo/TodayView";
 import { RoutineView } from "@/components/ordo/RoutineView";
 import { GoalsView } from "@/components/ordo/GoalsView";
@@ -54,8 +55,8 @@ function OrdoApp() {
     if (!user) return;
     setUndoBusy(true);
     try {
-      const res = await apiFetch<{ state: OrdoState }>("/api/state/undo", { method: "POST", json: {} });
-      update(() => res.state);
+      const restored = await undoState();
+      update(() => restored);
       toast.success("Last change undone");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Nothing to undo");
@@ -64,9 +65,10 @@ function OrdoApp() {
     }
   };
 
-  const handleExport = async (kind: "json" | "csv" | "ical") => {
+  const handleExport = (kind: ExportKind) => {
+    if (!state) return;
     try {
-      await downloadExport(kind);
+      downloadExport(kind, state, user);
       toast.success("Export downloaded");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Export failed");
@@ -134,7 +136,7 @@ function OrdoApp() {
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => void handleExport("json")}
+                    onClick={() => handleExport("json")}
                     className="inline-flex items-center rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
                     title="Export JSON"
                   >
@@ -142,7 +144,7 @@ function OrdoApp() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleExport("csv")}
+                    onClick={() => handleExport("csv")}
                     className="inline-flex items-center rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
                     title="Export CSV"
                   >
@@ -150,7 +152,7 @@ function OrdoApp() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleExport("ical")}
+                    onClick={() => handleExport("ical")}
                     className="inline-flex items-center rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
                     title="Export iCal"
                   >

@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import * as db from "@/lib/db";
+import type { PublicTemplate } from "@/lib/db";
 import { Panel, PanelTitle } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Users, Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Block } from "@/lib/ordo";
-
-type PublicTemplate = {
-  id: string;
-  author_name: string;
-  name: string;
-  blocks: Block[];
-  copies: number;
-  created_at: string;
-};
 
 export function PublicTemplates({
   onApply,
@@ -28,13 +20,16 @@ export function PublicTemplates({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!user) {
+      setTemplates([]);
+      return;
+    }
     try {
-      const res = await apiFetch<{ templates: PublicTemplate[] }>("/api/templates/public");
-      setTemplates(res.templates);
+      setTemplates(await db.listPublicTemplates());
     } catch {
       setTemplates([]);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     void load();
@@ -47,10 +42,7 @@ export function PublicTemplates({
     }
     setBusyId(t.id);
     try {
-      const res = await apiFetch<{ name: string; blocks: Block[] }>(`/api/templates/${t.id}/copy`, {
-        method: "POST",
-        json: {},
-      });
+      const res = await db.copyPublicTemplate(t.id);
       onApply(res.blocks);
       toast.success(`Applied “${res.name}” to day ${dayIdx}`);
       void load();
