@@ -1,0 +1,68 @@
+<!doctype html>
+<!--
+  Sign-in code (magic link flow). Deliberately contains NO {{ .ConfirmationURL }}:
+  the app verifies a 6-digit OTP via supabase.auth.verifyOtp, so a clickable link
+  would be a second, weaker path to the same session — and one that breaks when
+  the mail client opens it in a browser that has no pending sign-in.
+  Length comes from auth.email.otp_length, expiry from auth.email.otp_expiry.
+-->
+<html lang="en">
+  <body
+    style="
+      margin: 0;
+      padding: 24px;
+      background: #f6f6f4;
+      font-family:
+        -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Helvetica, Arial, sans-serif;
+      color: #1b1b18;
+    "
+  >
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      style="max-width: 440px; margin: 0 auto"
+    >
+      <tr>
+        <td
+          style="background: #ffffff; border: 1px solid #e6e4df; border-radius: 12px; padding: 32px"
+        >
+          <p style="margin: 0 0 4px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em">
+            Ordo
+          </p>
+          <p style="margin: 0 0 24px; font-size: 14px; color: #6b6a63">Discipline, measured.</p>
+
+          <p style="margin: 0 0 8px; font-size: 15px">Here is your sign-in code:</p>
+
+          <p
+            style="
+              margin: 0 0 24px;
+              font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+              font-size: 34px;
+              font-weight: 700;
+              letter-spacing: 0.18em;
+              color: #1b1b18;
+            "
+          >
+            {{ .Token }}
+          </p>
+
+          <p style="margin: 0 0 8px; font-size: 14px; color: #4b4a44">
+            Enter it on the sign-in screen to finish. It expires in an hour and can only be used
+            once.
+          </p>
+          <p style="margin: 0; font-size: 13px; color: #8a8880">
+            If you did not ask to sign in, you can ignore this email — nobody can get in without the
+            code.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 16px 8px 0; font-size: 12px; color: #a3a19a">
+          Sent to {{ .Email }} by Ordo.
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

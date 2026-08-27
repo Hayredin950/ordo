@@ -23,6 +23,13 @@ export type User = {
 
 export type OAuthProvider = "github" | "google";
 
+/**
+ * What a signup or code request left us with. `"session"` means Supabase signed
+ * the user straight in (email confirmation is off); `"code"` means it emailed a
+ * one-time code and is waiting for `codeVerify`.
+ */
+export type EmailStep = "session" | "code";
+
 type AuthContextValue = {
   user: User | null;
   /** Supabase access token; also the "we are synced" signal for useOrdoCloud. */
@@ -30,11 +37,11 @@ type AuthContextValue = {
   health: HealthStatus["status"] | null;
   loading: boolean;
   configured: boolean;
-  signup: (email: string, password: string, name?: string) => Promise<void>;
+  signup: (email: string, password: string, name?: string) => Promise<EmailStep>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  magicRequest: (email: string) => Promise<{ devCode?: string }>;
-  magicVerify: (email: string, code: string) => Promise<void>;
+  codeRequest: (email: string) => Promise<void>;
+  codeVerify: (email: string, code: string) => Promise<void>;
   oauthSignIn: (provider: OAuthProvider) => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -145,21 +152,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await hydrate(data.session);
   }, [hydrate]);
 
-  const signup = useCallback(async (email: string, password: string, name?: string) => {
-    const { data, error } = await requireSupabase().auth.signUp({
-      email,
-      password,
-      options: {
-        data: name ? { name } : {},
-        ...redirectOption("/login"),
-      },
-    });
-    if (error) throw dbError(error, "Could not create the account");
-    // With email confirmation on, Supabase returns a user but no session.
-    if (!data.session) {
-      throw new Error("Account created — check your email to confirm, then sign in");
-    }
-  }, []);
+  const signup = useCallback(
+    async (email: string, password: string, name?: string): Promise<EmailStep> => {
+      const { data, error } = await requireSupabase().auth.signUp({
+        email,
+        password,
+        options: {
+          data: name ? { name } : {},
+          ...redirectOption("/login"),
+        },
+      });
+      if (error) throw dbError(error, "Could not create the account");
+      // No session means email confirmation is on and a code is in flight; the
+      // caller shows the code screen rather than treating this as a failure.
+      return data.session ? "session" : "code";
+    },
+    [],
+  );
 
   const login = useCallback(async (email: string, password: string) => {
     const { error } = await requireSupabase().auth.signInWithPassword({ email, password });
@@ -172,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
   }, []);
 
-  const magicRequest = useCallback(async (email: string) => {
+  const codeRequest = useCallback(async (email: string) => {
     const { error } = await requireSupabase().auth.signInWithOtp({
       email,
       options: {
@@ -180,17 +189,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...redirectOption("/login"),
       },
     });
-    if (error) throw dbError(error, "Could not send the magic link");
-    return {};
+    if (error) throw dbError(error, "Could not send the code");
   }, []);
 
-  const magicVerify = useCallback(async (email: string, code: string) => {
+  /**
+   * One verifier for both flows. `type: "email"` accepts a signup-confirmation
+   * code and a sign-in code alike — checked against this project by minting each
+   * kind with admin/generate_link and verifying it — so the UI never has to know
+   * which email the code came from.
+   */
+  const codeVerify = useCallback(async (email: string, code: string) => {
     const { error } = await requireSupabase().auth.verifyOtp({
       email,
-      token: code.trim(),
+      token: code.replace(/\D/g, ""),
       type: "email",
     });
-    if (error) throw dbError(error, "Invalid or expired code");
+    if (error) throw dbError(error, "That code is wrong or has expired");
   }, []);
 
   const oauthSignIn = useCallback(async (provider: OAuthProvider) => {
@@ -211,8 +225,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signup,
       login,
       logout,
-      magicRequest,
-      magicVerify,
+      codeRequest,
+      codeVerify,
       oauthSignIn,
       refresh,
     }),
@@ -224,8 +238,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signup,
       login,
       logout,
-      magicRequest,
-      magicVerify,
+      codeRequest,
+      codeVerify,
       oauthSignIn,
       refresh,
     ],

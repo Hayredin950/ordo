@@ -231,11 +231,12 @@ enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
-# Confirmations are OFF deliberately. Supabase's built-in SMTP is capped at
-# `auth.rate_limit.email_sent` (2/hour, project-wide), so requiring a
-# confirmation email would make signup fail for everyone but the first person
-# each hour. Turn this back on the moment you configure [auth.email.smtp].
-enable_confirmations = false
+# Confirmations are ON: signup emails a 6-digit code and the account stays
+# unusable until it is verified. The cost is that Supabase's built-in SMTP is
+# capped at `auth.rate_limit.email_sent` (2/hour, project-wide), so the third
+# signup in an hour cannot receive its code. Configure [auth.email.smtp] with
+# your own sender before letting strangers sign up.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or
@@ -255,6 +256,28 @@ otp_expiry = 3600
 # pass = "env(SENDGRID_API_KEY)"
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
+
+# Both auth emails should carry a 6-digit code, not a clickable link: Supabase's
+# stock templates use {{ .ConfirmationURL }}, while these use {{ .Token }} so the
+# flow stays on the page the user started on — which is the only way the verifyOtp
+# path in src/lib/auth.tsx is reachable.
+#
+# They are COMMENTED OUT because a free-tier project on Supabase's built-in email
+# provider cannot change templates at all; pushing them fails the whole config
+# update with:
+#   unexpected status 400: Email template modification is not available for free
+#   tier projects using the default email provider.
+# Configure [auth.email.smtp] below with any sender you like (this lifts the
+# 2-emails-per-hour cap too), then uncomment these four lines and run
+# `supabase config push`. Until then the emails contain a link instead, and the
+# app accepts either.
+# [auth.email.template.magic_link]
+# subject = "Your Ordo sign-in code"
+# content_path = "./supabase/templates/magic_link.html"
+#
+# [auth.email.template.confirmation]
+# subject = "Confirm your Ordo account"
+# content_path = "./supabase/templates/confirmation.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -351,14 +374,20 @@ email_optional = false
 # the hosted project set the same client id/secret under Authentication →
 # Providers, and set OAUTH_GITHUB=1 / OAUTH_GOOGLE=1 on Vercel so the login page
 # shows the buttons.
+# GitHub and Google are ENABLED on the live project. They are recorded here as
+# enabled so that `supabase config push` does not turn them off — but that push
+# also writes `secret`, so export SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET and
+# SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET (plus the two CLIENT_IDs) before pushing,
+# or it will overwrite the working credentials with empty strings. The callback to
+# register with both providers is https://<project-ref>.supabase.co/auth/v1/callback.
 [auth.external.github]
-enabled = false
+enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID)"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"
 redirect_uri = ""
 
 [auth.external.google]
-enabled = false
+enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 redirect_uri = ""

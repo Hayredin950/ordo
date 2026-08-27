@@ -458,11 +458,39 @@ curl -sD - -o /dev/null \
 
 — the `Location` header shows the `client_id` and `redirect_uri` in play.
 
-**On email.** Supabase's built-in SMTP is capped at two emails per hour for the
-whole project, so email confirmation is turned off in `config.toml` (otherwise
-the third signup in an hour silently fails) and magic links are unreliable until
-you configure `[auth.email.smtp]` with your own sender. Password and OAuth
-sign-in are unaffected.
+**On email, and why it needs your own SMTP.** Ordo's sign-in and signup screens
+both verify a **6-digit code** (`supabase.auth.verifyOtp`), not a clickable link,
+so the user never leaves the tab they started in. Supabase generates that code
+either way — but its stock email templates print `{{ .ConfirmationURL }}` instead
+of `{{ .Token }}`, and a free-tier project on Supabase's built-in email provider
+is not allowed to change them:
+
+```
+400 Email template modification is not available for free tier projects
+    using the default email provider.
+```
+
+Configuring `[auth.email.smtp]` with any sender of your own lifts that
+restriction — and also the built-in provider's cap of two emails per hour for the
+entire project, which is the other reason not to ship on it. Once SMTP is set:
+
+1. Uncomment the two `[auth.email.template.*]` blocks in
+   [`supabase/config.toml`](supabase/config.toml) — the templates themselves are
+   in [`supabase/templates/`](supabase/templates) and already use `{{ .Token }}`.
+2. Set `enable_confirmations = true` so a new account is unusable until its
+   address is verified.
+3. `supabase config push`.
+
+Until then the emails carry a link. The app copes: the code screen still appears,
+and clicking the link also lands a session. `verifyOtp({ type: "email" })` accepts
+both the signup-confirmation code and the sign-in code — verified against this
+project by minting each with `admin/generate_link` and redeeming it — so one code
+path serves both flows. Password and OAuth sign-in never touch email at all.
+
+**Careful with `supabase config push`.** It writes the whole auth config, including
+`external.*.secret`. Export `SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID`,
+`SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET` and the two Google equivalents first, or the
+push will overwrite your working OAuth credentials with empty strings.
 
 What the migration sets up:
 
