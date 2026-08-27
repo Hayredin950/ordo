@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
 import type { PublicTemplate } from "@/lib/db";
 import { Panel, PanelTitle } from "./primitives";
@@ -57,10 +57,16 @@ export function PublicTemplates({
 
   return (
     <Panel>
-      <PanelTitle title="Shared template library" hint="Routines others published — copy any into your schedule." />
+      <PanelTitle
+        title="Shared template library"
+        hint="Routines others published — copy any into your schedule."
+      />
       <div className="space-y-2">
         {templates.slice(0, 6).map((t) => (
-          <div key={t.id} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm">
+          <div
+            key={t.id}
+            className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm"
+          >
             <Users className="size-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <div className="truncate font-medium">{t.name}</div>
@@ -68,8 +74,19 @@ export function PublicTemplates({
                 by {t.author_name} · {t.blocks.length} blocks · {t.copies} copies
               </div>
             </div>
-            <Button variant="ghost" size="sm" disabled={busyId === t.id} onClick={() => void copy(t)}>
-              {busyId === t.id ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="tap shrink-0"
+              aria-label={`Copy template: ${t.name}`}
+              disabled={busyId === t.id}
+              onClick={() => void copy(t)}
+            >
+              {busyId === t.id ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Copy className="size-4" />
+              )}
             </Button>
           </div>
         ))}

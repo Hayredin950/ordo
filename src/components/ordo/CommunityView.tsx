@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
 import type { BoardRow, Challenge, Peer } from "@/lib/db";
 import { Panel, PanelTitle } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +16,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, Users, Trophy, Trash2, ChevronDown, ChevronUp, Loader2, Flag } from "lucide-react";
+import {
+  UserPlus,
+  Users,
+  Trophy,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Flag,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export function CommunityView() {
@@ -157,21 +165,32 @@ export function CommunityView() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <Panel>
         <PanelTitle
           title="Accountability pairing"
           hint="Each of you sees the other's weekly % — never task details."
         />
-        <div className="flex gap-2">
+        {/* Stacked on a phone: an email field squeezed next to a button is too
+            narrow to read the address you just typed. */}
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             value={pairEmail}
             type="email"
             placeholder="friend@example.com"
             onChange={(e) => setPairEmail(e.target.value)}
           />
-          <Button size="sm" disabled={pairBusy} onClick={() => void addPair()}>
-            {pairBusy ? <Loader2 className="mr-1 size-4 animate-spin" /> : <UserPlus className="mr-1 size-4" />}
+          <Button
+            size="sm"
+            className="tap w-full sm:w-auto sm:shrink-0"
+            disabled={pairBusy}
+            onClick={() => void addPair()}
+          >
+            {pairBusy ? (
+              <Loader2 className="mr-1 size-4 animate-spin" />
+            ) : (
+              <UserPlus className="mr-1 size-4" />
+            )}
             Pair
           </Button>
         </div>
@@ -182,16 +201,25 @@ export function CommunityView() {
             </p>
           ) : (
             peers.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm">
+              <div
+                key={p.id}
+                className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm sm:gap-3"
+              >
                 <Users className="size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{p.name || p.email}</div>
                   <div className="truncate text-xs text-muted-foreground">{p.email}</div>
                 </div>
-                <span className="rounded bg-muted px-2 py-1 font-display text-sm font-semibold tabular-nums">
+                <span className="shrink-0 rounded bg-muted px-2 py-1 font-display text-sm font-semibold tabular-nums">
                   {p.weekly === null ? "—" : `${p.weekly}%`}
                 </span>
-                <Button variant="ghost" size="icon" aria-label="Remove pairing" onClick={() => void removePair(p.id)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="tap -mr-1 shrink-0"
+                  aria-label={`Remove pairing with ${p.email}`}
+                  onClick={() => void removePair(p.id)}
+                >
                   <Trash2 className="size-4" />
                 </Button>
               </div>
@@ -205,24 +233,32 @@ export function CommunityView() {
           title="Challenges"
           hint="Opt-in 30-day tests of willpower, ranked by completion rate."
         />
-        <div className="flex gap-2">
+        {/* Name gets its own line on a phone; the day count and the action share
+            the second one because neither needs full width. */}
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             value={chName}
             placeholder="e.g. 30 days of study"
             onChange={(e) => setChName(e.target.value)}
           />
-          <Input
-            type="number"
-            min={7}
-            max={90}
-            value={chDays}
-            aria-label="Challenge length in days"
-            onChange={(e) => setChDays(Number(e.target.value) || 30)}
-            className="w-24"
-          />
-          <Button size="sm" onClick={() => void createChallenge()}>
-            <Flag className="mr-1 size-4" /> Create
-          </Button>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              min={7}
+              max={90}
+              value={chDays}
+              aria-label="Challenge length in days"
+              onChange={(e) => setChDays(Number(e.target.value) || 30)}
+              className="w-20 shrink-0 sm:w-24"
+            />
+            <Button
+              size="sm"
+              className="tap flex-1 sm:flex-none"
+              onClick={() => void createChallenge()}
+            >
+              <Flag className="mr-1 size-4" /> Create
+            </Button>
+          </div>
         </div>
         <div className="mt-3 space-y-2">
           {!challenges?.length ? (
@@ -230,23 +266,45 @@ export function CommunityView() {
           ) : (
             challenges.map((c) => (
               <div key={c.id} className="rounded-lg border border-border p-3 text-sm">
-                <div className="flex items-center gap-3">
-                  <Trophy className="size-4 shrink-0 text-primary" />
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <Trophy className="mt-0.5 size-4 shrink-0 text-primary" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{c.name}</div>
+                    <div className="break-words font-medium">{c.name}</div>
                     <div className="text-xs text-muted-foreground">
                       {c.starts_on} → {c.ends_on} · {c.members} member{c.members === 1 ? "" : "s"}
                     </div>
                   </div>
                   {c.joined ? (
-                    <span className="rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary">Joined</span>
-                  ) : (
-                    <Button size="sm" variant="secondary" onClick={() => void joinChallenge(c.id)}>
+                    <span className="shrink-0 rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                      Joined
+                    </span>
+                  ) : null}
+                </div>
+                {/* The actions sit under the title rather than beside it: "Join"
+                    plus "Leaderboard" plus a name never fit one phone line. */}
+                <div className="mt-2 flex items-center gap-2">
+                  {c.joined ? null : (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="tap flex-1 sm:flex-none"
+                      onClick={() => void joinChallenge(c.id)}
+                    >
                       Join
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => void toggleBoard(c.id)}>
-                    {openBoard === c.id ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="tap flex-1 sm:flex-none"
+                    aria-expanded={openBoard === c.id}
+                    onClick={() => void toggleBoard(c.id)}
+                  >
+                    {openBoard === c.id ? (
+                      <ChevronUp className="size-4" />
+                    ) : (
+                      <ChevronDown className="size-4" />
+                    )}
                     Leaderboard
                   </Button>
                 </div>
@@ -260,19 +318,27 @@ export function CommunityView() {
                       <>
                         {board.rows.slice(0, 5).map((r, i) => (
                           <div key={r.user_id} className="flex items-center gap-2 text-xs">
-                            <span className="w-5 font-semibold tabular-nums text-muted-foreground">#{i + 1}</span>
+                            <span className="w-5 font-semibold tabular-nums text-muted-foreground">
+                              #{i + 1}
+                            </span>
                             <span className="flex-1 truncate">{r.name || "Anonymous"}</span>
                             <span className="font-medium tabular-nums">{r.score}%</span>
                           </div>
                         ))}
                         {board.myRank ? (
-                          <p className="pt-1 text-xs font-medium text-primary">Your rank: #{board.myRank}</p>
+                          <p className="pt-1 text-xs font-medium text-primary">
+                            Your rank: #{board.myRank}
+                          </p>
                         ) : (
-                          <p className="pt-1 text-xs text-muted-foreground">You haven't joined this challenge.</p>
+                          <p className="pt-1 text-xs text-muted-foreground">
+                            You haven't joined this challenge.
+                          </p>
                         )}
                       </>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Could not load the leaderboard.</p>
+                      <p className="text-xs text-muted-foreground">
+                        Could not load the leaderboard.
+                      </p>
                     )}
                   </div>
                 ) : null}
@@ -288,32 +354,42 @@ export function CommunityView() {
           <div>
             <p className="font-medium">Data & privacy</p>
             <p className="mt-1 text-muted-foreground">
-              Everything is exportable (JSON, CSV, iCal) from the header. Version history keeps the last 30 snapshots —
-              use the Undo button in the header to step back.
+              Everything is exportable (JSON, CSV, iCal) from the header. Version history keeps the
+              last 30 snapshots — use the Undo button in the header to step back.
             </p>
           </div>
-          <div className="rounded-lg border border-destructive/40 p-4">
+          <div className="rounded-lg border border-destructive/40 p-3 sm:p-4">
             <p className="font-medium text-destructive">Delete account</p>
             <p className="mt-1 text-muted-foreground">
-              Permanently removes your account, sync state, pairings, letters and memberships. This cannot be undone.
+              Permanently removes your account, sync state, pairings, letters and memberships. This
+              cannot be undone.
             </p>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="mt-3" disabled={deleting}>
-                  {deleting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null} Delete my account
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="tap mt-3 w-full sm:w-auto"
+                  disabled={deleting}
+                >
+                  {deleting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null} Delete my
+                  account
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete your Ordo account?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    All synced data is wiped from the server. Export anything you want to keep first. This cannot be
-                    undone.
+                    All synced data is wiped from the server. Export anything you want to keep
+                    first. This cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Keep my account</AlertDialogCancel>
-                  <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => void deleteAccount()}>
+                  <AlertDialogCancel className="tap">Keep my account</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="tap bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => void deleteAccount()}
+                  >
                     Delete forever
                   </AlertDialogAction>
                 </AlertDialogFooter>

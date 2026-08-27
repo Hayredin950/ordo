@@ -1,52 +1,14 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { health as fetchHealth, type HealthStatus } from "./api";
 import { dbError, requireSupabase, supabase, supabaseConfigured } from "./supabase";
-
-export type User = {
-  id: string;
-  email: string;
-  name: string;
-  avatar_url: string;
-  provider: string;
-  created_at: string;
-};
-
-export type OAuthProvider = "github" | "google";
-
-/**
- * What a signup or code request left us with. `"session"` means Supabase signed
- * the user straight in (email confirmation is off); `"code"` means it emailed a
- * one-time code and is waiting for `codeVerify`.
- */
-export type EmailStep = "session" | "code";
-
-type AuthContextValue = {
-  user: User | null;
-  /** Supabase access token; also the "we are synced" signal for useOrdoCloud. */
-  token: string | null;
-  health: HealthStatus["status"] | null;
-  loading: boolean;
-  configured: boolean;
-  signup: (email: string, password: string, name?: string) => Promise<EmailStep>;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  codeRequest: (email: string) => Promise<void>;
-  codeVerify: (email: string, code: string) => Promise<void>;
-  oauthSignIn: (provider: OAuthProvider) => Promise<void>;
-  refresh: () => Promise<void>;
-};
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import {
+  AuthContext,
+  type AuthContextValue,
+  type EmailStep,
+  type OAuthProvider,
+  type User,
+} from "./auth-context";
 
 /**
  * Where Supabase should send the user back to. Omitted entirely during SSR
@@ -246,10 +208,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
-  return ctx;
 }

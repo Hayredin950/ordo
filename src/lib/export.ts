@@ -28,11 +28,7 @@ function blockLookup(state: OrdoState): Map<string, Block> {
 }
 
 export function buildJson(state: OrdoState, user: { id: string; email: string } | null): string {
-  return JSON.stringify(
-    { exportedAt: new Date().toISOString(), user, state },
-    null,
-    2,
-  );
+  return JSON.stringify({ exportedAt: new Date().toISOString(), user, state }, null, 2);
 }
 
 export function buildCsv(state: OrdoState): string {

@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type CategoryId =
-  | "health"
-  | "study"
-  | "work"
-  | "finance"
-  | "spiritual"
-  | "relationships";
+export type CategoryId = "health" | "study" | "work" | "finance" | "spiritual" | "relationships";
 
 export const CATEGORIES: { id: CategoryId; label: string; token: string }[] = [
   { id: "health", label: "Health", token: "var(--cat-health)" },
@@ -89,10 +83,37 @@ const weekend: Block[] = [
 ];
 
 const seedGoals: Goal[] = [
-  { id: "g-year", title: "Become undeniably disciplined", period: "year", category: "work", target: 80 },
-  { id: "g-sem", title: "Ship Ordo + pass semester", period: "semester", category: "study", target: 85, parentId: "g-year" },
-  { id: "g-month", title: "Train 20 days this month", period: "month", category: "health", target: 75, parentId: "g-sem" },
-  { id: "g-week", title: "10h focused study", period: "week", category: "study", target: 90, parentId: "g-month" },
+  {
+    id: "g-year",
+    title: "Become undeniably disciplined",
+    period: "year",
+    category: "work",
+    target: 80,
+  },
+  {
+    id: "g-sem",
+    title: "Ship Ordo + pass semester",
+    period: "semester",
+    category: "study",
+    target: 85,
+    parentId: "g-year",
+  },
+  {
+    id: "g-month",
+    title: "Train 20 days this month",
+    period: "month",
+    category: "health",
+    target: 75,
+    parentId: "g-sem",
+  },
+  {
+    id: "g-week",
+    title: "10h focused study",
+    period: "week",
+    category: "study",
+    target: 90,
+    parentId: "g-month",
+  },
 ];
 
 function seedLog(routine: Record<number, Block[]>): LogMap {
@@ -125,7 +146,9 @@ export const defaultState = (): OrdoState => {
   return {
     routine,
     overrides: {},
-    templates: [{ id: uid(), name: "Exam week", blocks: weekday.map((x) => ({ ...x, id: uid() })) }],
+    templates: [
+      { id: uid(), name: "Exam week", blocks: weekday.map((x) => ({ ...x, id: uid() })) },
+    ],
     goals: seedGoals,
     log: seedLog(routine),
     journal: {},

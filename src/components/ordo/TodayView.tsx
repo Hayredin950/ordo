@@ -15,7 +15,7 @@ import { ChevronLeft, ChevronRight, Flame, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { TelegramPanel } from "./TelegramPanel";
 import { FocusTimer } from "./FocusTimer";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
 
 const STEPS = [0, 25, 50, 75, 100];
@@ -59,7 +59,7 @@ export function TodayView({
     }));
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+    <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.6fr_1fr]">
       <Panel>
         <PanelTitle
           title={day.toLocaleDateString(undefined, {
@@ -69,14 +69,26 @@ export function TodayView({
           })}
           hint={`${blocks.length} time blocks planned${state.overrides[key] ? " · custom day" : ""}`}
           action={
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" aria-label="Previous day" onClick={() => setOffset((o) => o - 1)}>
+            <div className="flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tap"
+                aria-label="Previous day"
+                onClick={() => setOffset((o) => o - 1)}
+              >
                 <ChevronLeft className="size-4" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setOffset(0)}>
+              <Button variant="ghost" size="sm" className="tap" onClick={() => setOffset(0)}>
                 Today
               </Button>
-              <Button variant="ghost" size="icon" aria-label="Next day" onClick={() => setOffset((o) => o + 1)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tap"
+                aria-label="Next day"
+                onClick={() => setOffset((o) => o + 1)}
+              >
                 <ChevronRight className="size-4" />
               </Button>
             </div>
@@ -91,17 +103,20 @@ export function TodayView({
           ) : null}
           {blocks.map((blk) => {
             const pct = entries[blk.id] ?? 0;
+            const done = pct >= 100;
             return (
               <div
                 key={blk.id}
-                className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background/40 p-3"
+                className={`rounded-lg border p-3 transition-colors sm:flex sm:flex-wrap sm:items-center sm:gap-3 ${
+                  done ? "border-primary/30 bg-primary/5" : "border-border bg-background/40"
+                }`}
               >
-                <div className="w-24 shrink-0 font-display text-sm tabular-nums text-muted-foreground">
+                <div className="font-display text-sm tabular-nums text-muted-foreground sm:w-24 sm:shrink-0">
                   {blk.start}–{blk.end}
                 </div>
-                <div className="min-w-40 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={pct >= 100 ? "line-through opacity-60" : ""}>{blk.title}</span>
+                <div className="mt-1 min-w-0 sm:mt-0 sm:flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className={done ? "line-through opacity-60" : ""}>{blk.title}</span>
                     {blk.priority === "must" ? (
                       <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                         must
@@ -112,12 +127,20 @@ export function TodayView({
                     <CategoryPill id={blk.category} />
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                {/* Full-width segmented control on a phone (each target ≥44px),
+                    a compact inline group once there is room beside the title. */}
+                <div
+                  className="mt-3 grid grid-cols-5 gap-1 sm:mt-0 sm:flex sm:shrink-0"
+                  role="group"
+                  aria-label={`Completion for ${blk.title}`}
+                >
                   {STEPS.map((v) => (
                     <button
                       key={v}
+                      type="button"
+                      aria-pressed={pct === v}
                       onClick={() => setPct(blk.id, v)}
-                      className={`h-7 rounded-md px-2 text-xs font-medium transition-colors ${
+                      className={`tap h-10 rounded-md text-xs font-medium transition-colors sm:h-7 sm:px-2 ${
                         pct === v
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-muted-foreground hover:bg-accent"
@@ -133,7 +156,10 @@ export function TodayView({
         </div>
 
         <div className="mt-5">
-          <PanelTitle title="Reflection" hint="One honest line about today — fuels better suggestions." />
+          <PanelTitle
+            title="Reflection"
+            hint="One honest line about today — fuels better suggestions."
+          />
           <Textarea
             value={state.journal[key] ?? ""}
             onChange={(e) =>
@@ -145,12 +171,14 @@ export function TodayView({
         </div>
       </Panel>
 
-      <div className="space-y-5">
-        <Panel className="flex items-center gap-5">
+      {/* On a tablet the sidebar panels sit two-up instead of stretching to full
+          width; from `lg` they return to a single column beside the day. */}
+      <div className="grid items-start gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-1">
+        <Panel className="flex items-center gap-4 sm:gap-5">
           <Ring value={score} label="today" />
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 font-display text-lg font-semibold">
-              <Flame className="size-4 text-primary" /> {s.current}-day streak
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-2 font-display text-base font-semibold sm:text-lg">
+              <Flame className="size-4 shrink-0 text-primary" /> {s.current}-day streak
             </div>
             <p className="text-sm text-muted-foreground">Best ever: {s.best} days</p>
             <p className="text-xs text-muted-foreground">Counted when a day closes above 70%.</p>
@@ -158,12 +186,18 @@ export function TodayView({
         </Panel>
 
         <div className="grid grid-cols-2 gap-3">
-          <Stat value={`${blocks.filter((x) => (entries[x.id] ?? 0) >= 100).length}/${blocks.length}`} label="Blocks cleared" />
+          <Stat
+            value={`${blocks.filter((x) => (entries[x.id] ?? 0) >= 100).length}/${blocks.length}`}
+            label="Blocks cleared"
+          />
           <Stat value={`${debt.length}`} label="Missed-task debt" />
         </div>
 
         <Panel>
-          <PanelTitle title="Debt & catch-up" hint="Skipped must-do blocks from the last 14 days." />
+          <PanelTitle
+            title="Debt & catch-up"
+            hint="Skipped must-do blocks from the last 14 days."
+          />
           <div className="space-y-2">
             {debt.length === 0 ? (
               <p className="text-sm text-muted-foreground">Clean slate. Nothing owed.</p>
@@ -172,13 +206,18 @@ export function TodayView({
                 <div key={`${date}-${block.id}-${i}`} className="flex items-center gap-2 text-sm">
                   <AlertTriangle className="size-3.5 shrink-0 text-primary" />
                   <span className="flex-1 truncate">{block.title}</span>
-                  <span className="text-xs text-muted-foreground">{date.slice(5)}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{date.slice(5)}</span>
                 </div>
               ))
             )}
           </div>
           {debt.length > 0 ? (
-            <Button variant="secondary" size="sm" className="mt-4 w-full" onClick={() => void proposeCatchUp()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="tap mt-4 w-full"
+              onClick={() => void proposeCatchUp()}
+            >
               Propose a catch-up plan
             </Button>
           ) : null}

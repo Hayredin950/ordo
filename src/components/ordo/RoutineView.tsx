@@ -12,13 +12,13 @@ import {
   type CategoryId,
   type OrdoState,
 } from "@/lib/ordo";
-import { CategoryPill, Panel, PanelTitle } from "./primitives";
+import { CategoryPill, Panel, PanelTitle, SegButton } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2, Copy, Save, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { PublicTemplates } from "./PublicTemplates";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -92,86 +92,92 @@ export function RoutineView({
     });
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+    <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.6fr_1fr]">
       <Panel>
         <PanelTitle
           title="Default routine"
           hint="The plan. What actually happened lives in the daily log."
           action={
-            <Button size="sm" onClick={() => setBlocks((bs) => [...bs, newBlock()])}>
-              <Plus className="mr-1 size-4" /> Block
+            <Button
+              size="sm"
+              className="tap w-full sm:w-auto"
+              onClick={() => setBlocks((bs) => [...bs, newBlock()])}
+            >
+              <Plus className="size-4" /> Block
             </Button>
           }
         />
 
-        <div className="mb-4 flex flex-wrap gap-1">
+        {/* Seven equal columns fit a 320px phone; the labels are already 3 chars. */}
+        <div className="mb-4 grid grid-cols-7 gap-1" role="group" aria-label="Day of week">
           {DAYS.map((d, i) => (
-            <button
-              key={d}
-              onClick={() => setDayIdx(i)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                i === dayIdx
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent"
-              }`}
-            >
+            <SegButton key={d} active={i === dayIdx} className="px-0" onClick={() => setDayIdx(i)}>
               {d}
-            </button>
+            </SegButton>
           ))}
         </div>
 
         <div className="space-y-2">
           {blocks.map((b) => (
+            /* One line from `sm` up; on a phone it becomes three stacked rows —
+               times side by side, then the title, then category/priority/delete. */
             <div
               key={b.id}
-              className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/40 p-3"
+              className="grid gap-2 rounded-lg border border-border bg-background/40 p-3 sm:flex sm:flex-wrap sm:items-center"
             >
-              <Input
-                value={b.start}
-                type="time"
-                className="w-28"
-                aria-label="Start time"
-                onChange={(e) => patch(b.id, { start: e.target.value })}
-              />
-              <Input
-                value={b.end}
-                type="time"
-                className="w-28"
-                aria-label="End time"
-                onChange={(e) => patch(b.id, { end: e.target.value })}
-              />
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                <Input
+                  value={b.start}
+                  type="time"
+                  className="sm:w-28"
+                  aria-label="Start time"
+                  onChange={(e) => patch(b.id, { start: e.target.value })}
+                />
+                <Input
+                  value={b.end}
+                  type="time"
+                  className="sm:w-28"
+                  aria-label="End time"
+                  onChange={(e) => patch(b.id, { end: e.target.value })}
+                />
+              </div>
               <Input
                 value={b.title}
-                className="min-w-40 flex-1"
+                className="sm:min-w-40 sm:flex-1"
                 aria-label="Block title"
                 onChange={(e) => patch(b.id, { title: e.target.value })}
               />
-              <select
-                value={b.category}
-                aria-label="Category"
-                onChange={(e) => patch(b.id, { category: e.target.value as CategoryId })}
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => patch(b.id, { priority: b.priority === "must" ? "nice" : "must" })}
-                className="rounded-md bg-muted px-2 py-1.5 text-[11px] uppercase tracking-wide text-muted-foreground hover:bg-accent"
-              >
-                {b.priority}
-              </button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Delete block"
-                onClick={() => setBlocks((bs) => bs.filter((x) => x.id !== b.id))}
-              >
-                <Trash2 className="size-4" />
-              </Button>
+              <div className="flex items-center gap-2 sm:contents">
+                <select
+                  value={b.category}
+                  aria-label="Category"
+                  onChange={(e) => patch(b.id, { category: e.target.value as CategoryId })}
+                  className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm sm:h-9 sm:flex-none"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  aria-label={`Priority: ${b.priority}. Tap to toggle.`}
+                  onClick={() => patch(b.id, { priority: b.priority === "must" ? "nice" : "must" })}
+                  className="tap h-10 shrink-0 rounded-md bg-muted px-2.5 text-[11px] uppercase tracking-wide text-muted-foreground hover:bg-accent sm:h-9"
+                >
+                  {b.priority}
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="tap shrink-0"
+                  aria-label="Delete block"
+                  onClick={() => setBlocks((bs) => bs.filter((x) => x.id !== b.id))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
             </div>
           ))}
           {blocks.length === 0 ? (
@@ -182,22 +188,23 @@ export function RoutineView({
         </div>
       </Panel>
 
-      <div className="space-y-5">
+      <div className="grid items-start gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-1">
         <Panel>
           <PanelTitle
             title="Duplicate this day"
             hint={`Copy ${DAYS[dayIdx]}'s schedule elsewhere.`}
           />
-          <div className="mb-3 flex flex-wrap gap-1">
+          <div className="mb-3 grid grid-cols-3 gap-1 sm:flex sm:flex-wrap">
             {DAYS.map((d, i) =>
               i === dayIdx ? null : (
                 <button
                   key={d}
+                  type="button"
                   onClick={() => {
                     copyTo(i);
                     toast.success(`Copied to ${d}`);
                   }}
-                  className="rounded-md bg-muted px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
+                  className="tap rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground hover:bg-accent sm:py-1.5"
                 >
                   <Copy className="mr-1 inline size-3.5" />
                   {d}
@@ -208,7 +215,7 @@ export function RoutineView({
           <Button
             variant="secondary"
             size="sm"
-            className="w-full"
+            className="tap w-full"
             onClick={() => {
               applyWeekdays();
               toast.success("Applied to Mon–Fri");
@@ -224,12 +231,12 @@ export function RoutineView({
               value={rangeDays}
               aria-label="Days in range"
               onChange={(e) => setRangeDays(Number(e.target.value) || 1)}
-              className="w-24"
+              className="w-20 shrink-0"
             />
             <Button
               variant="secondary"
               size="sm"
-              className="flex-1"
+              className="tap flex-1"
               onClick={() => {
                 applyRange();
                 toast.success(`Applied across the next ${rangeDays} days`);
@@ -245,41 +252,46 @@ export function RoutineView({
             title="Template library"
             hint="Save any day, reuse it any time — or share it."
           />
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={templateName}
               placeholder="e.g. Exam week"
               onChange={(e) => setTemplateName(e.target.value)}
             />
-            <Button
-              size="sm"
-              onClick={() => {
-                if (!templateName.trim()) return;
-                update((prev) => ({
-                  ...prev,
-                  templates: [
-                    ...prev.templates,
-                    {
-                      id: newId(),
-                      name: templateName.trim(),
-                      blocks: cloneBlocks(prev.routine[dayIdx] ?? []),
-                    },
-                  ],
-                }));
-                setTemplateName("");
-                toast.success("Template saved");
-              }}
-            >
-              <Save className="size-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={publishing}
-              onClick={() => void publishDay()}
-            >
-              <Globe className="size-4" /> Publish
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="tap flex-1 sm:flex-none"
+                onClick={() => {
+                  if (!templateName.trim()) return;
+                  update((prev) => ({
+                    ...prev,
+                    templates: [
+                      ...prev.templates,
+                      {
+                        id: newId(),
+                        name: templateName.trim(),
+                        blocks: cloneBlocks(prev.routine[dayIdx] ?? []),
+                      },
+                    ],
+                  }));
+                  setTemplateName("");
+                  toast.success("Template saved");
+                }}
+              >
+                <Save className="size-4" />
+                <span className="sm:hidden">Save</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="tap flex-1 sm:flex-none"
+                disabled={publishing}
+                onClick={() => void publishDay()}
+              >
+                <Globe className="size-4" /> Publish
+              </Button>
+            </div>
           </div>
           <div className="mt-3 space-y-2">
             {state.templates.map((t) => (
@@ -287,11 +299,14 @@ export function RoutineView({
                 key={t.id}
                 className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm"
               >
-                <span className="flex-1 truncate">{t.name}</span>
-                <span className="text-xs text-muted-foreground">{t.blocks.length} blocks</span>
+                <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {t.blocks.length} blocks
+                </span>
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="tap shrink-0"
                   onClick={() => {
                     update((prev) => ({
                       ...prev,
@@ -315,17 +330,18 @@ export function RoutineView({
         />
 
         <Panel>
-          <PanelTitle title="Week at a glance" />
+          <PanelTitle title="Week at a glance" hint="One bar per block, coloured by category." />
           <div className="grid grid-cols-7 gap-1 text-center">
             {DAYS.map((d, i) => {
               const list = blocksFor(state, addDays(startOfWeek(new Date()), i));
               return (
-                <div key={d} className="rounded-md border border-border p-2">
+                <div key={d} className="rounded-md border border-border p-1 sm:p-2">
                   <div className="text-[11px] text-muted-foreground">{d}</div>
-                  <div className="mt-1 flex flex-col items-center gap-1">
+                  <div className="mt-1 flex min-h-6 flex-col items-center gap-1">
                     {list.slice(0, 5).map((b) => (
                       <span
                         key={b.id}
+                        title={`${b.start} ${b.title}`}
                         className="h-1.5 w-full rounded-full"
                         style={{ backgroundColor: `var(--cat-${b.category})` }}
                       />

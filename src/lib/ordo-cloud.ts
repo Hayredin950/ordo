@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useOrdo, type OrdoState } from "./ordo";
-import { useAuth } from "./auth";
+import { useAuth } from "./auth-context";
 import { loadState, saveState } from "./db";
 
 /**

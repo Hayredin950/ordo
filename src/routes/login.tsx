@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +41,7 @@ function LoginPage() {
 
   if (user) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="px-safe flex min-h-dvh items-center justify-center px-4 py-8">
         <Card className="w-full max-w-sm">
           <CardHeader>
             <CardTitle>Already signed in</CardTitle>
@@ -49,7 +49,7 @@ function LoginPage() {
           </CardHeader>
           <CardContent>
             <Link to="/" className="block">
-              <Button className="w-full">Back to Ordo</Button>
+              <Button className="tap w-full">Back to Ordo</Button>
             </Link>
           </CardContent>
         </Card>
@@ -127,11 +127,15 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="px-safe flex min-h-dvh items-center justify-center px-4 py-8">
       <Toaster />
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <img src="/logo-icon.png" alt="Ordo logo" className="mx-auto mb-4 h-24 w-24" />
+          <img
+            src="/logo-icon.png"
+            alt="Ordo logo"
+            className="mx-auto mb-3 size-20 sm:mb-4 sm:size-24"
+          />
           <CardTitle className="font-display text-2xl">Ordo</CardTitle>
           <CardDescription>
             Discipline, measured. Sign in to sync your accountability data.
@@ -144,11 +148,13 @@ function LoginPage() {
               VITE_SUPABASE_ANON_KEY, then redeploy.
             </p>
           ) : null}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Flex rather than a two-column grid: with a single provider enabled a
+              grid would leave a dead half-row. */}
+          <div className="flex flex-wrap gap-2">
             {health?.github ? (
               <Button
                 variant="outline"
-                className="w-full"
+                className="tap flex-1 basis-32"
                 disabled={busy}
                 onClick={() => void oauth("github")}
               >
@@ -158,7 +164,7 @@ function LoginPage() {
             {health?.google ? (
               <Button
                 variant="outline"
-                className="w-full"
+                className="tap flex-1 basis-32"
                 disabled={busy}
                 onClick={() => void oauth("google")}
               >
@@ -193,7 +199,7 @@ function LoginPage() {
                 inputMode="numeric"
                 maxLength={6}
                 placeholder="123456"
-                className="text-center font-mono text-lg tracking-[0.4em]"
+                className="h-12 text-center font-mono text-lg tracking-[0.4em] md:h-12 md:text-lg"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 onKeyDown={(e) => {
@@ -201,7 +207,7 @@ function LoginPage() {
                 }}
               />
               <Button
-                className="w-full"
+                className="tap w-full"
                 disabled={busy || code.length < 6}
                 onClick={() => void submitCode()}
               >
@@ -212,6 +218,7 @@ function LoginPage() {
                 <Button
                   variant="link"
                   size="sm"
+                  className="tap"
                   disabled={busy || cooldown > 0}
                   onClick={() => void resend()}
                 >
@@ -220,7 +227,7 @@ function LoginPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full"
+                  className="tap w-full"
                   onClick={() => {
                     setCode("");
                     setMode("login");
@@ -270,7 +277,7 @@ function LoginPage() {
                 </p>
               )}
 
-              <Button className="w-full" disabled={busy} onClick={() => void submit()}>
+              <Button className="tap w-full" disabled={busy} onClick={() => void submit()}>
                 {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 {mode === "login"
                   ? "Sign in"
@@ -282,19 +289,29 @@ function LoginPage() {
               <div className="flex flex-wrap justify-center gap-1 text-sm">
                 {mode === "login" ? (
                   <>
-                    <Button variant="link" size="sm" onClick={() => setMode("signup")}>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="tap"
+                      onClick={() => setMode("signup")}
+                    >
                       Create an account
                     </Button>
-                    <Button variant="link" size="sm" onClick={() => setMode("code")}>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="tap"
+                      onClick={() => setMode("code")}
+                    >
                       Sign in with a code
                     </Button>
                   </>
                 ) : mode === "signup" ? (
-                  <Button variant="link" size="sm" onClick={() => setMode("login")}>
+                  <Button variant="link" size="sm" className="tap" onClick={() => setMode("login")}>
                     Already have an account?
                   </Button>
                 ) : (
-                  <Button variant="link" size="sm" onClick={() => setMode("login")}>
+                  <Button variant="link" size="sm" className="tap" onClick={() => setMode("login")}>
                     Back to sign in
                   </Button>
                 )}

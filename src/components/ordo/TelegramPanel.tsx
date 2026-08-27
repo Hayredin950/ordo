@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Panel, PanelTitle } from "./primitives";
-import { Bell, Copy, Check, Loader2, Send, Hash, Link2, Unlink } from "lucide-react";
+import { Copy, Check, Loader2, Send, Hash, Link2, Unlink } from "lucide-react";
 import { toast } from "sonner";
 
 type TelegramStatus = {
@@ -146,34 +146,55 @@ export function TelegramPanel() {
 
   return (
     <Panel>
-      <PanelTitle title="Notification channels" hint="Telegram-first, Slack as a second option — one shared service." />
-      <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">Telegram</p>
+      <PanelTitle
+        title="Notification channels"
+        hint="Telegram-first, Slack as a second option — one shared service."
+      />
+      <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        Telegram
+      </p>
       {!configured ? (
         <p className="text-sm text-muted-foreground">
-          Bot not configured on the server yet. Set <code className="rounded bg-muted px-1">TELEGRAM_BOT_TOKEN</code> to
-          activate reminders, nags and check-ins.
+          Bot not configured on the server yet. Set{" "}
+          <code className="rounded bg-muted px-1">TELEGRAM_BOT_TOKEN</code> to activate reminders,
+          nags and check-ins.
         </p>
       ) : status?.linked ? (
         <div className="space-y-3 text-sm">
-          <p className="flex items-center gap-2">
-            <Check className="size-4 text-primary" /> Linked to chat{" "}
-            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{status.linked.chatId}</span>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Check className="size-4 shrink-0 text-primary" /> Linked to chat{" "}
+            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+              {status.linked.chatId}
+            </span>
             {status.linked.username ? ` (@${status.linked.username})` : ""}
           </p>
-          <p className="text-muted-foreground">You'll get 10-minute reminders, nags and the 21:00 check-in here.</p>
-          <Button variant="secondary" size="sm" disabled={busy} onClick={() => void unlink()}>
+          <p className="text-muted-foreground">
+            You'll get 10-minute reminders, nags and the 21:00 check-in here.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="tap w-full sm:w-auto"
+            disabled={busy}
+            onClick={() => void unlink()}
+          >
             Unlink this chat
           </Button>
         </div>
       ) : (
         <div className="space-y-3 text-sm">
-          <p className="text-muted-foreground">Open the bot and send <b>/link CODE</b> to bind this account to a chat.</p>
+          <p className="text-muted-foreground">
+            Open the bot and send <b>/link CODE</b> to bind this account to a chat.
+          </p>
           {code ? (
             <div className="flex items-center gap-2 rounded-lg border border-border p-3">
-              <span className="flex-1 font-mono text-lg font-bold tracking-widest">{code}</span>
+              <span className="min-w-0 flex-1 break-all font-mono text-lg font-bold tracking-widest">
+                {code}
+              </span>
               <Button
                 variant="ghost"
                 size="icon"
+                className="tap shrink-0"
                 aria-label="Copy code"
                 onClick={() => {
                   void navigator.clipboard.writeText(code);
@@ -184,49 +205,82 @@ export function TelegramPanel() {
               </Button>
             </div>
           ) : (
-            <Button size="sm" disabled={busy} onClick={() => void generate()}>
-              {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
+            <Button
+              size="sm"
+              className="tap w-full sm:w-auto"
+              disabled={busy}
+              onClick={() => void generate()}
+            >
+              {busy ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Send className="mr-2 size-4" />
+              )}
               Generate link code
             </Button>
           )}
           <p className="text-xs text-muted-foreground">
-            {status?.botUsername ? `Bot: @${status.botUsername}` : "Bot username not set (TELEGRAM_BOT_USERNAME)."}
-            {" "}Code expires in 15 minutes.
+            {status?.botUsername
+              ? `Bot: @${status.botUsername}`
+              : "Bot username not set (TELEGRAM_BOT_USERNAME)."}{" "}
+            Code expires in 15 minutes.
           </p>
         </div>
       )}
 
       <div className="my-4 border-t border-border" />
-      <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">Slack</p>
+      <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        Slack
+      </p>
       {!slackConfigured ? (
         <p className="text-sm text-muted-foreground">
-          Slack not configured on the server. Set <code className="rounded bg-muted px-1">SLACK_BOT_TOKEN</code> to
-          receive reminders here too.
+          Slack not configured on the server. Set{" "}
+          <code className="rounded bg-muted px-1">SLACK_BOT_TOKEN</code> to receive reminders here
+          too.
         </p>
       ) : slack?.linked ? (
         <div className="space-y-2 text-sm">
-          <p className="flex items-center gap-2">
-            <Check className="size-4 text-primary" /> Linked to{" "}
-            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{slack.linked.channel}</span>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Check className="size-4 shrink-0 text-primary" /> Linked to{" "}
+            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+              {slack.linked.channel}
+            </span>
           </p>
-          <Button variant="secondary" size="sm" disabled={slackBusy} onClick={() => void unlinkSlack()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="tap w-full sm:w-auto"
+            disabled={slackBusy}
+            onClick={() => void unlinkSlack()}
+          >
             <Unlink className="mr-1 size-4" /> Unlink Slack
           </Button>
         </div>
       ) : (
         <div className="space-y-2 text-sm">
           <p className="text-muted-foreground">
-            Add your workspace channel (e.g. <b>#daily</b>) and reminders, nags and reports go there too.
+            Add your workspace channel (e.g. <b>#daily</b>) and reminders, nags and reports go there
+            too.
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={slackChannel}
               placeholder="#general"
-              className="h-9"
+              aria-label="Slack channel"
               onChange={(e) => setSlackChannel(e.target.value)}
             />
-            <Button size="sm" variant="secondary" disabled={slackBusy} onClick={() => void linkSlack()}>
-              {slackBusy ? <Loader2 className="mr-1 size-4 animate-spin" /> : <Link2 className="mr-1 size-4" />}
+            <Button
+              size="sm"
+              variant="secondary"
+              className="tap w-full sm:w-auto sm:shrink-0"
+              disabled={slackBusy}
+              onClick={() => void linkSlack()}
+            >
+              {slackBusy ? (
+                <Loader2 className="mr-1 size-4 animate-spin" />
+              ) : (
+                <Link2 className="mr-1 size-4" />
+              )}
               Link
             </Button>
           </div>

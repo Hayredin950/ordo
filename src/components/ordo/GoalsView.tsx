@@ -9,7 +9,7 @@ import {
   type Goal,
   type OrdoState,
 } from "@/lib/ordo";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
 import type { FutureLetter } from "@/lib/db";
 import { CategoryPill, Panel, PanelTitle } from "./primitives";
@@ -112,42 +112,61 @@ export function GoalsView({
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+    <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.6fr_1fr]">
       <Panel>
-        <PanelTitle title="Goal hierarchy" hint="Year rolls down to the day; the day rolls back up." />
+        <PanelTitle
+          title="Goal hierarchy"
+          hint="Year rolls down to the day; the day rolls back up."
+        />
         <div className="space-y-6">
           {PERIODS.map((p) => {
             const goals = state.goals.filter((g) => g.period === p);
             const actual = periodScore(state, p);
             return (
               <div key={p}>
-                <div className="mb-2 flex items-center justify-between">
-                  <h3 className="font-display text-sm uppercase tracking-widest text-muted-foreground">{p}</h3>
-                  <span className="text-xs text-muted-foreground">rollup {actual}%</span>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="font-display text-sm uppercase tracking-widest text-muted-foreground">
+                    {p}
+                  </h3>
+                  <span className="shrink-0 text-xs text-muted-foreground">rollup {actual}%</span>
                 </div>
                 <div className="space-y-2">
                   {goals.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No {p} goal set.</p>
                   ) : null}
                   {goals.map((g) => (
-                    <div key={g.id} className="rounded-lg border border-border bg-background/40 p-3">
-                      <div className="flex items-center gap-2">
-                        <span className="flex-1">{g.title}</span>
-                        <CategoryPill id={g.category} />
+                    <div
+                      key={g.id}
+                      className="rounded-lg border border-border bg-background/40 p-3"
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm sm:text-base">{g.title}</p>
+                          <div className="mt-1.5">
+                            <CategoryPill id={g.category} />
+                          </div>
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          aria-label="Delete goal"
+                          className="tap -mr-1 shrink-0"
+                          aria-label={`Delete goal: ${g.title}`}
                           onClick={() =>
-                            update((prev) => ({ ...prev, goals: prev.goals.filter((x) => x.id !== g.id) }))
+                            update((prev) => ({
+                              ...prev,
+                              goals: prev.goals.filter((x) => x.id !== g.id),
+                            }))
                           }
                         >
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
                       <div className="mt-2 flex items-center gap-3">
-                        <Progress value={Math.min(100, (actual / g.target) * 100)} className="h-2 flex-1" />
-                        <span className="w-24 text-right text-xs tabular-nums text-muted-foreground">
+                        <Progress
+                          value={Math.min(100, (actual / g.target) * 100)}
+                          className="h-2 flex-1"
+                        />
+                        <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
                           {actual}% / {g.target}%
                         </span>
                       </div>
@@ -160,17 +179,21 @@ export function GoalsView({
         </div>
       </Panel>
 
-      <div className="space-y-5">
+      <div className="grid items-start gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-1">
         <Panel>
           <PanelTitle title="New goal" />
           <div className="space-y-2">
-            <Input value={title} placeholder="What do you want to be true?" onChange={(e) => setTitle(e.target.value)} />
+            <Input
+              value={title}
+              placeholder="What do you want to be true?"
+              onChange={(e) => setTitle(e.target.value)}
+            />
             <div className="flex gap-2">
               <select
                 value={period}
                 aria-label="Period"
                 onChange={(e) => setPeriod(e.target.value as Goal["period"])}
-                className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm sm:h-9"
               >
                 {PERIODS.map((p) => (
                   <option key={p} value={p}>
@@ -182,7 +205,7 @@ export function GoalsView({
                 value={category}
                 aria-label="Category"
                 onChange={(e) => setCategory(e.target.value as CategoryId)}
-                className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm sm:h-9"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -191,18 +214,21 @@ export function GoalsView({
                 ))}
               </select>
             </div>
-            <Button className="w-full" onClick={add}>
-              <Plus className="mr-1 size-4" /> Add goal
+            <Button className="tap w-full" onClick={add}>
+              <Plus className="size-4" /> Add goal
             </Button>
           </div>
         </Panel>
 
         <Panel>
-          <PanelTitle title="Future-self letter" hint="Sealed until the deadline, delivered by the bot — win or lose." />
+          <PanelTitle
+            title="Future-self letter"
+            hint="Sealed until the deadline, delivered by the bot — win or lose."
+          />
           {!user ? (
             <p className="text-sm text-muted-foreground">
-              Sign in to write a letter to your future self. It stays sealed until the deadline you set, then the bot
-              delivers it — win or lose.
+              Sign in to write a letter to your future self. It stays sealed until the deadline you
+              set, then the bot delivers it — win or lose.
             </p>
           ) : (
             <div className="space-y-3">
@@ -225,11 +251,17 @@ export function GoalsView({
                   onChange={(e) => setLetterBody(e.target.value)}
                 />
                 <Button
-                  className="w-full"
-                  disabled={letterBusy || !letterTitle.trim() || !letterDeadline || !letterBody.trim()}
+                  className="tap w-full"
+                  disabled={
+                    letterBusy || !letterTitle.trim() || !letterDeadline || !letterBody.trim()
+                  }
                   onClick={() => void saveLetter()}
                 >
-                  {letterBusy ? <Loader2 className="mr-1 size-4 animate-spin" /> : <Lock className="mr-1 size-4" />}
+                  {letterBusy ? (
+                    <Loader2 className="mr-1 size-4 animate-spin" />
+                  ) : (
+                    <Lock className="mr-1 size-4" />
+                  )}
                   Seal the letter
                 </Button>
               </div>
@@ -238,7 +270,10 @@ export function GoalsView({
                   <p className="text-sm text-muted-foreground">No letters sealed yet.</p>
                 ) : (
                   letters.map((l) => (
-                    <div key={l.id} className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm">
+                    <div
+                      key={l.id}
+                      className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm"
+                    >
                       <Mail className="mt-0.5 size-4 shrink-0 text-primary" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">{l.goal_title}</div>
@@ -246,7 +281,13 @@ export function GoalsView({
                           delivers {l.deadline} · {l.delivered ? "delivered ✓" : "sealed"}
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" aria-label="Delete letter" onClick={() => void deleteLetter(l.id)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="tap -mr-1 shrink-0"
+                        aria-label={`Delete letter: ${l.goal_title}`}
+                        onClick={() => void deleteLetter(l.id)}
+                      >
                         <Trash2 className="size-4" />
                       </Button>
                     </div>
