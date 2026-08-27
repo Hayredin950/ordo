@@ -363,29 +363,181 @@ Do you want the AI reflection to be purely observational, or should it be allowe
 - Year-in-review report, points, milestone badges, future-self letters (bot-delivered on deadline)
 - Version history / undo (last 30 snapshots), full account deletion, guest/demo mode (localStorage)
 
-## Development
+## Architecture
 
-The app is a TanStack Start (React + Tailwind) frontend plus a Node.js + Express + PostgreSQL backend (`server/`).
+There is no separate backend server. The database *is* the backend.
 
-```sh
-# 1. Postgres (docker)
-docker run -d --name ordo-postgres \
-  -e POSTGRES_PASSWORD=ordo_dev_pw -e POSTGRES_USER=ordo -e POSTGRES_DB=ordo \
-  -p 5434:5432 -v ordo_pgdata:/var/lib/postgresql/data postgres:16
-
-# 2. Backend (auth, bot, scheduler, AI coach)
-cd server
-npm i
-cp .env.example .env   # optional: Telegram token, OAuth keys, Anthropic key
-npm run dev            # http://localhost:8787
-
-# 3. Frontend (in another terminal, from repo root)
-bun install
-bun run dev            # http://localhost:5173
+```
+Browser ──supabase-js──▶ Supabase Postgres   (row level security enforces access)
+   │                          ▲
+   │                          │ service role
+   └──▶ Vercel (TanStack Start SSR + 5 API routes) ──┘
+             ▲
+             └── GitHub Actions / Vercel Cron / any cron service → /api/cron/tick
 ```
 
-Signed out, the app behaves exactly like the original Phase 1 (all data in
-localStorage). Sign in and your data syncs per-user to Postgres, the Telegram
-bot becomes available, and the coach report is generated server-side.
+- **Frontend + SSR: Vercel only.** Nitro's `vercel` preset emits Build Output API
+  v3 into `.vercel/output/`.
+- **Data + auth: Supabase.** Every read and write goes straight from the browser
+  to Postgres through `supabase-js`. Access control lives in RLS policies, not in
+  application code, so there is nothing to trust on the client. Supabase Auth
+  handles email/password, magic links, and GitHub/Google OAuth.
+- **Serverless routes** exist only for the few things that genuinely cannot run
+  in the browser (they need the service role key or a third-party secret):
 
-See [`server/README.md`](server/README.md) for the full backend docs.
+  | Route | Purpose |
+  | --- | --- |
+  | `GET /api/health` | Which integrations are configured (drives the UI badges) |
+  | `GET /api/coach/weekly` | AI weekly reflection (Anthropic, RLS-scoped read) |
+  | `GET /api/coach/catchup` | AI catch-up proposal |
+  | `POST /api/telegram/webhook` | Telegram bot, verified by secret token header |
+  | `GET\|POST /api/cron/tick` | One idempotent scheduler pass, `Bearer $CRON_SECRET` |
+
+- **Anything touching a secret lives in `src/lib/server/*.server.ts`.** TanStack's
+  import protection rewrites `*.server.*` files to mocks in the client
+  environment, so a stray import fails loudly instead of shipping a key.
+
+## Development
+
+```sh
+bun install
+cp .env.example .env.local   # fill in at least VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+bun run dev                  # http://localhost:5173
+```
+
+Signed out, the app runs entirely on localStorage (guest/demo mode). Sign in and
+the same data syncs per-user to Supabase; every integration below degrades to
+"not configured" in the UI rather than breaking.
+
+```sh
+bun run typecheck   # tsc --noEmit
+bun run lint        # eslint .
+bun run build       # vite build + register the Vercel cron
+```
+
+## Supabase setup
+
+The whole schema is one migration: [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql).
+
+```sh
+supabase login
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
+
+Then in the dashboard: **Authentication → URL Configuration** → set the site URL
+and add your Vercel domain to the redirect allow-list, and **Authentication →
+Providers** → enable GitHub and/or Google with their client id/secret.
+
+What the migration sets up:
+
+- `profiles`, `user_state`, `telegram_links`, `telegram_codes`, `slack_links`,
+  `notification_rules`, `public_templates`, `pairings`, `challenges`,
+  `challenge_members`, `future_letters`, `onboarding`, `notification_log`.
+  `user_state` holds the user's whole Ordo document as `jsonb`, plus a `history`
+  stack (capped at 30) that powers undo.
+- **RLS on every table**, with `user_id = auth.uid()` as the rule. Nothing is
+  readable across accounts by default; the two exceptions are deliberate and
+  read-only (`public_templates` and `challenges` are browsable by any signed-in
+  user).
+- A `handle_new_user()` trigger that creates the `profiles` row on signup.
+- `SECURITY DEFINER` functions for the things a user must do without direct table
+  access: `save_state` / `undo_state`, `weekly_pct`, `peer_progress`,
+  `pair_with_email` / `unpair`, `list_challenges` / `create_challenge` /
+  `join_challenge` / `challenge_leaderboard`, `publish_template` /
+  `copy_public_template`, `set_onboarding`, `create_telegram_code` /
+  `claim_telegram_code`, and `delete_account`. `peer_progress` and
+  `challenge_leaderboard` return aggregate percentages only — never task details.
+- `notification_log` doubles as the scheduler's idempotency lock: its primary key
+  is `(user_id, kind, day, ref)`, so a duplicate send attempt fails with `23505`
+  and is skipped. Overlapping cron pings are therefore harmless.
+
+## Environment variables
+
+Copy [`.env.example`](.env.example) to `.env.local` for development and set the
+same keys on Vercel. Nothing here is required to boot — without Supabase the app
+runs on localStorage, and every integration degrades to "not configured".
+
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | client + server | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | client + server | Public by design; RLS is what protects the data |
+| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | Bypasses RLS. Used by exactly two routes: the Telegram webhook and the cron tick |
+| `OAUTH_GITHUB`, `OAUTH_GOOGLE` | server | `1` to show the buttons on the login page. The providers themselves are configured in the Supabase dashboard |
+| `CRON_SECRET` | server | `Authorization: Bearer` value that `/api/cron/tick` requires. `openssl rand -hex 32` |
+| `ORDO_TZ_OFFSET_MINUTES` | server | Minutes to shift the schedule from UTC, so "07:00" means 07:00 where you are (`180` for UTC+3). Defaults to `0` |
+| `TELEGRAM_BOT_TOKEN` | server | From @BotFather |
+| `TELEGRAM_BOT_USERNAME` | server | Shown in the UI as the deep link to your bot |
+| `TELEGRAM_WEBHOOK_SECRET` | server | Must match the `secret_token` you register; the route 401s without it |
+| `SLACK_BOT_TOKEN` | server | Optional second channel; the bot must be invited to the channel |
+| `ANTHROPIC_API_KEY` | server | Optional. Without it the coach falls back to a rule-based report |
+| `ANTHROPIC_MODEL` | server | Defaults to `claude-sonnet-4-5-20250929` |
+| `VITE_API_URL` | client | Only if the frontend and API routes live on different origins. Empty = same origin |
+
+## Scheduler
+
+`/api/cron/tick` is one idempotent pass over every linked user. Each ping does the
+whole job, so it does not matter how often — or from how many sources — it is
+called. Per pass it can send: the morning brief (07:00–12:00), a pre-block
+reminder (0–15 min ahead), a nag for unfinished must-do blocks, the evening
+check-in with 0/25/50/75/100 buttons (from 21:00), the weekly report (Sunday from
+20:00), and any future-self letters that came due.
+
+If a send fails, its `notification_log` claim is deleted so the next tick retries.
+
+Three ways to ping it, all supported at once:
+
+1. **GitHub Actions** — [`.github/workflows/cron.yml`](.github/workflows/cron.yml),
+   every 5 minutes. This is the one that gives you minute-level reminders. Add
+   `ORDO_APP_URL` and `CRON_SECRET` as repository secrets
+   (*Settings → Secrets and variables → Actions*).
+2. **Vercel Cron** — registered at build time by
+   [`scripts/vercel-crons.mjs`](scripts/vercel-crons.mjs), which patches
+   `crons` into `.vercel/output/config.json` (`0 7 * * *`). Vercel injects the
+   `Authorization` header itself from the project's `CRON_SECRET`. Hobby plans
+   are limited to one daily cron, which is why Actions carries the fine-grained
+   schedule.
+3. **Any external cron service** — just hit the URL:
+
+   ```sh
+   curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<your-app>/api/cron/tick
+   ```
+
+## Telegram bot
+
+The bot is a webhook, not a long-poller — there is no process to keep alive.
+Register it once per deployment:
+
+```sh
+curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d "url=https://<your-app>/api/telegram/webhook" \
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
+```
+
+To link an account: generate a code from the Telegram panel on the Today view,
+then send
+`/link <code>` to the bot. Commands: `/start`, `/link`, `/today`, `/status`,
+`/unlink`. The evening check-in's buttons write the completion % straight back
+into `user_state`.
+
+## Deploying to Vercel
+
+```sh
+vercel login
+vercel link
+vercel env add VITE_SUPABASE_URL production      # …and the rest of the table above
+vercel --prod
+```
+
+Or connect the GitHub repo in the Vercel dashboard and let it build on push.
+`bun run build` is the build command; the output is `.vercel/output` (Build Output
+API v3), which Vercel detects automatically.
+
+There is nothing to deploy on Render. The old `server/` Express app, its
+`render.yaml`, and the whole long-polling bot process are gone — replaced by RLS
+policies plus the five serverless routes above.
+
+
+
+
+

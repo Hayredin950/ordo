@@ -19,7 +19,7 @@ import { Plus, Trash2, Copy, Save, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { PublicTemplates } from "./PublicTemplates";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import * as db from "@/lib/db";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -49,10 +49,7 @@ export function RoutineView({
     const name = templateName.trim() || `${DAYS[dayIdx]} routine`;
     setPublishing(true);
     try {
-      await apiFetch("/api/templates/publish", {
-        method: "POST",
-        json: { name, blocks: cloneBlocks(blocks) },
-      });
+      await db.publishTemplate(name, cloneBlocks(blocks));
       toast.success(`Published “${name}” to the shared library`);
       setTemplateName("");
     } catch (err) {
@@ -64,13 +61,19 @@ export function RoutineView({
   const blocks = [...(state.routine[dayIdx] ?? [])].sort((a, b) => a.start.localeCompare(b.start));
 
   const setBlocks = (fn: (b: Block[]) => Block[]) =>
-    update((prev) => ({ ...prev, routine: { ...prev.routine, [dayIdx]: fn(prev.routine[dayIdx] ?? []) } }));
+    update((prev) => ({
+      ...prev,
+      routine: { ...prev.routine, [dayIdx]: fn(prev.routine[dayIdx] ?? []) },
+    }));
 
   const patch = (id: string, p: Partial<Block>) =>
     setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, ...p } : b)));
 
   const copyTo = (target: number) =>
-    update((prev) => ({ ...prev, routine: { ...prev.routine, [target]: cloneBlocks(prev.routine[dayIdx] ?? []) } }));
+    update((prev) => ({
+      ...prev,
+      routine: { ...prev.routine, [target]: cloneBlocks(prev.routine[dayIdx] ?? []) },
+    }));
 
   const applyWeekdays = () =>
     update((prev) => {
@@ -107,7 +110,9 @@ export function RoutineView({
               key={d}
               onClick={() => setDayIdx(i)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                i === dayIdx ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"
+                i === dayIdx
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent"
               }`}
             >
               {d}
@@ -117,7 +122,10 @@ export function RoutineView({
 
         <div className="space-y-2">
           {blocks.map((b) => (
-            <div key={b.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/40 p-3">
+            <div
+              key={b.id}
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/40 p-3"
+            >
               <Input
                 value={b.start}
                 type="time"
@@ -167,14 +175,19 @@ export function RoutineView({
             </div>
           ))}
           {blocks.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No blocks on {DAYS[dayIdx]} yet.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No blocks on {DAYS[dayIdx]} yet.
+            </p>
           ) : null}
         </div>
       </Panel>
 
       <div className="space-y-5">
         <Panel>
-          <PanelTitle title="Duplicate this day" hint={`Copy ${DAYS[dayIdx]}'s schedule elsewhere.`} />
+          <PanelTitle
+            title="Duplicate this day"
+            hint={`Copy ${DAYS[dayIdx]}'s schedule elsewhere.`}
+          />
           <div className="mb-3 flex flex-wrap gap-1">
             {DAYS.map((d, i) =>
               i === dayIdx ? null : (
@@ -228,7 +241,10 @@ export function RoutineView({
         </Panel>
 
         <Panel>
-          <PanelTitle title="Template library" hint="Save any day, reuse it any time — or share it." />
+          <PanelTitle
+            title="Template library"
+            hint="Save any day, reuse it any time — or share it."
+          />
           <div className="flex gap-2">
             <Input
               value={templateName}
@@ -243,7 +259,11 @@ export function RoutineView({
                   ...prev,
                   templates: [
                     ...prev.templates,
-                    { id: newId(), name: templateName.trim(), blocks: cloneBlocks(prev.routine[dayIdx] ?? []) },
+                    {
+                      id: newId(),
+                      name: templateName.trim(),
+                      blocks: cloneBlocks(prev.routine[dayIdx] ?? []),
+                    },
                   ],
                 }));
                 setTemplateName("");
@@ -252,20 +272,31 @@ export function RoutineView({
             >
               <Save className="size-4" />
             </Button>
-            <Button size="sm" variant="secondary" disabled={publishing} onClick={() => void publishDay()}>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={publishing}
+              onClick={() => void publishDay()}
+            >
               <Globe className="size-4" /> Publish
             </Button>
           </div>
           <div className="mt-3 space-y-2">
             {state.templates.map((t) => (
-              <div key={t.id} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm">
+              <div
+                key={t.id}
+                className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm"
+              >
                 <span className="flex-1 truncate">{t.name}</span>
                 <span className="text-xs text-muted-foreground">{t.blocks.length} blocks</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    update((prev) => ({ ...prev, routine: { ...prev.routine, [dayIdx]: cloneBlocks(t.blocks) } }));
+                    update((prev) => ({
+                      ...prev,
+                      routine: { ...prev.routine, [dayIdx]: cloneBlocks(t.blocks) },
+                    }));
                     toast.success(`Applied “${t.name}” to ${DAYS[dayIdx]}`);
                   }}
                 >

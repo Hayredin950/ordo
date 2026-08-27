@@ -1,0 +1,46 @@
+# The scheduler that actually keeps time. Vercel's Hobby plan allows one cron
+# invocation per day, which is useless for 10-minute reminders — so GitHub
+# Actions pings /api/cron/tick every 5 minutes instead, and Vercel's daily cron
+# stays as a backstop. Both are safe to overlap: the tick claims every message
+# in notification_log before sending, so nothing goes out twice.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   ORDO_APP_URL  — e.g. https://ordo-core.vercel.app
+#   CRON_SECRET   — same value as the CRON_SECRET env var on Vercel
+name: cron
+
+on:
+  schedule:
+    # GitHub queues these on a best-effort basis; expect drift under load.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+# One tick at a time; a queued run is pointless once a newer one exists.
+concurrency:
+  group: ordo-cron
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /api/cron/tick
+        env:
+          APP_URL: ${{ secrets.ORDO_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "ORDO_APP_URL or CRON_SECRET is not set — nothing to ping."
+            exit 0
+          fi
+          body=$(mktemp)
+          code=$(curl --silent --show-error --max-time 60 --output "$body" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/tick")
+          echo "HTTP $code"
+          cat "$body"
+          echo
+          [ "$code" = "200" ]

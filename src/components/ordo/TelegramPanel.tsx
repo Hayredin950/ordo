@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import * as db from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Panel, PanelTitle } from "./primitives";
@@ -32,27 +32,24 @@ export function TelegramPanel() {
   const refreshSlack = useCallback(async () => {
     if (!user) return;
     try {
-      setSlack(await apiFetch<SlackStatus>("/api/slack/status"));
+      setSlack({ configured: health?.slack ?? false, linked: await db.slackLink() });
     } catch {
       setSlack(null);
     }
-  }, [user]);
+  }, [user, health]);
 
   useEffect(() => {
     void refreshSlack();
   }, [refreshSlack]);
 
   const linkSlack = async () => {
-    if (!slackChannel.trim()) return;
+    if (!user || !slackChannel.trim()) return;
     setSlackBusy(true);
     try {
-      const res = await apiFetch<{ channel: string }>("/api/slack/link", {
-        method: "POST",
-        json: { channel: slackChannel.trim() },
-      });
-      setSlack((s) => (s ? { ...s, linked: { channel: res.channel } } : s));
+      const channel = await db.linkSlack(user.id, slackChannel.trim());
+      setSlack((s) => (s ? { ...s, linked: { channel } } : s));
       setSlackChannel("");
-      toast.success(`Slack linked to ${res.channel}`);
+      toast.success(`Slack linked to ${channel}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not link Slack");
     } finally {
@@ -61,11 +58,14 @@ export function TelegramPanel() {
   };
 
   const unlinkSlack = async () => {
+    if (!user) return;
     setSlackBusy(true);
     try {
-      await apiFetch("/api/slack/unlink", { method: "POST", json: {} });
+      await db.unlinkSlack(user.id);
       setSlack((s) => (s ? { ...s, linked: null } : s));
       toast.success("Slack unlinked");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not unlink Slack");
     } finally {
       setSlackBusy(false);
     }
@@ -74,14 +74,18 @@ export function TelegramPanel() {
   const refresh = useCallback(async (): Promise<TelegramStatus | null> => {
     if (!user) return null;
     try {
-      const s = await apiFetch<TelegramStatus>("/api/telegram/status");
+      const s: TelegramStatus = {
+        configured: health?.telegram ?? false,
+        botUsername: health?.telegramBot ?? "",
+        linked: await db.telegramLink(),
+      };
       setStatus(s);
       return s;
     } catch {
       setStatus(null);
       return null;
     }
-  }, [user]);
+  }, [user, health]);
 
   useEffect(() => {
     void refresh();
@@ -112,13 +116,12 @@ export function TelegramPanel() {
   const generate = async () => {
     setBusy(true);
     try {
-      const res = await apiFetch<{ code: string; botUsername: string }>("/api/telegram/link", {
-        method: "POST",
-        json: {},
+      const linkCode = await db.createTelegramCode();
+      setCode(linkCode);
+      const bot = health?.telegramBot ?? "";
+      toast.info("Send this code to the bot", {
+        description: `Open Telegram → @${bot || "your bot"} → /link ${linkCode}`,
       });
-      setCode(res.code);
-      setStatus((s) => (s ? { ...s, botUsername: res.botUsername } : s));
-      toast.info("Send this code to the bot", { description: `Open Telegram → @${res.botUsername || "your bot"} → /link ${res.code}` });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create link code");
     } finally {
@@ -129,9 +132,11 @@ export function TelegramPanel() {
   const unlink = async () => {
     setBusy(true);
     try {
-      await apiFetch("/api/telegram/unlink", { method: "POST", json: {} });
+      await db.unlinkTelegram(user.id);
       setStatus((s) => (s ? { ...s, linked: null } : s));
       toast.success("Unlinked");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not unlink");
     } finally {
       setBusy(false);
     }

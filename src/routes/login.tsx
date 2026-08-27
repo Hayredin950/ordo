@@ -17,7 +17,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { login, signup, magicRequest, magicVerify, health, user } = useAuth();
+  const { login, signup, magicRequest, magicVerify, oauthSignIn, health, user, configured } = useAuth();
   const [mode, setMode] = useState<"login" | "signup" | "magic" | "magic-verify">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -53,9 +53,9 @@ function LoginPage() {
         await login(email, password);
         toast.success("Signed in");
       } else {
-        const res = await magicRequest(email);
-        toast.success("Check the server console for your code", {
-          description: res.devCode ? `Dev code: ${res.devCode}` : undefined,
+        await magicRequest(email);
+        toast.success("Check your inbox", {
+          description: "Open the link, or paste the 6-digit code below.",
         });
         setMode("magic-verify");
       }
@@ -78,6 +78,16 @@ function LoginPage() {
     }
   };
 
+  const oauth = async (provider: "github" | "google") => {
+    setBusy(true);
+    try {
+      await oauthSignIn(provider);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sign-in failed");
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Toaster />
@@ -88,20 +98,22 @@ function LoginPage() {
           <CardDescription>Discipline, measured. Sign in to sync your accountability data.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!configured ? (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              This deployment has no Supabase credentials. Set VITE_SUPABASE_URL and
+              VITE_SUPABASE_ANON_KEY, then redeploy.
+            </p>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
             {health?.github ? (
-              <a href={`${import.meta.env["VITE_API_URL"] ?? "http://localhost:8787"}/api/auth/github`}>
-                <Button variant="outline" className="w-full">
-                  <Github className="mr-2 size-4" /> GitHub
-                </Button>
-              </a>
+              <Button variant="outline" className="w-full" disabled={busy} onClick={() => void oauth("github")}>
+                <Github className="mr-2 size-4" /> GitHub
+              </Button>
             ) : null}
             {health?.google ? (
-              <a href={`${import.meta.env["VITE_API_URL"] ?? "http://localhost:8787"}/api/auth/google`}>
-                <Button variant="outline" className="w-full">
-                  <Mail className="mr-2 size-4" /> Google
-                </Button>
-              </a>
+              <Button variant="outline" className="w-full" disabled={busy} onClick={() => void oauth("google")}>
+                <Mail className="mr-2 size-4" /> Google
+              </Button>
             ) : null}
           </div>
           {health?.github || health?.google ? (
@@ -115,9 +127,10 @@ function LoginPage() {
               <Label htmlFor="code">Magic code</Label>
               <Input
                 id="code"
-                placeholder="A1B2C3"
+                inputMode="numeric"
+                placeholder="123456"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onChange={(e) => setCode(e.target.value.trim())}
               />
               <Button className="w-full" disabled={busy} onClick={submitMagic}>
                 {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null} Verify code

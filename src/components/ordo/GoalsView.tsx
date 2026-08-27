@@ -10,7 +10,8 @@ import {
   type OrdoState,
 } from "@/lib/ordo";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import * as db from "@/lib/db";
+import type { FutureLetter } from "@/lib/db";
 import { CategoryPill, Panel, PanelTitle } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,15 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Plus, Trash2, Mail, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-type FutureLetter = {
-  id: string;
-  goal_title: string;
-  body: string;
-  deadline: string;
-  delivered: boolean;
-  created_at: string;
-};
 
 const PERIODS: Goal["period"][] = ["year", "semester", "month", "week", "day"];
 
@@ -68,8 +60,7 @@ export function GoalsView({
   const loadLetters = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await apiFetch<{ letters: FutureLetter[] }>("/api/letters");
-      setLetters(res.letters);
+      setLetters(await db.listLetters());
     } catch {
       setLetters([]);
     }
@@ -80,12 +71,14 @@ export function GoalsView({
   }, [loadLetters]);
 
   const saveLetter = async () => {
-    if (!letterTitle.trim() || !letterDeadline || !letterBody.trim()) return;
+    if (!user || !letterTitle.trim() || !letterDeadline || !letterBody.trim()) return;
     setLetterBusy(true);
     try {
-      await apiFetch("/api/letters", {
-        method: "POST",
-        json: { goal_title: letterTitle.trim(), body: letterBody.trim(), deadline: letterDeadline },
+      await db.createLetter({
+        goal_title: letterTitle.trim(),
+        body: letterBody.trim(),
+        deadline: letterDeadline,
+        userId: user.id,
       });
       toast.success("Letter sealed — the bot delivers it on the deadline.");
       setLetterTitle("");
@@ -101,7 +94,7 @@ export function GoalsView({
 
   const deleteLetter = async (id: string) => {
     try {
-      await apiFetch(`/api/letters/${id}`, { method: "DELETE", json: {} });
+      await db.deleteLetter(id);
       setLetters((ls) => (ls ? ls.filter((l) => l.id !== id) : ls));
       toast.success("Letter deleted");
     } catch (err) {
