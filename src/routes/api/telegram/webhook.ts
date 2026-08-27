@@ -11,6 +11,10 @@
  *
  * Handler errors are swallowed on purpose: Telegram retries any non-2xx, and a
  * poison update would otherwise be redelivered forever.
+ *
+ * GET is declared only to answer 405. Without it an unhandled method falls
+ * through to SSR and returns the app's HTML shell with a 200, which makes the
+ * route look healthy to anything probing it with a browser.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { fail, json, serverConfig } from "@/lib/server/config.server";
@@ -19,6 +23,7 @@ import { handleTelegramUpdate, type TelegramUpdate } from "@/lib/server/telegram
 export const Route = createFileRoute("/api/telegram/webhook")({
   server: {
     handlers: {
+      GET: () => fail(405, "This endpoint only accepts POST from Telegram"),
       POST: async ({ request }) => {
         if (!serverConfig.telegramBotToken) return fail(503, "Telegram bot not configured");
         if (!serverConfig.telegramWebhookSecret)

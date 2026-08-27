@@ -155,16 +155,20 @@ max_indexes = 5
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
-# in emails.
-site_url = "http://localhost:5173"
+# in emails. This is the production domain, because it is what confirmation and magic-link emails
+# must point at; local development is covered by additional_redirect_urls below.
+site_url = "https://ordo-core.vercel.app"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 # OAuth and magic links return to "/" and the app takes it from there.
 additional_redirect_urls = [
   "http://localhost:5173",
+  "http://localhost:5173/**",
   "http://localhost:8080",
   "https://ordo-core.vercel.app",
+  "https://ordo-core.vercel.app/**",
+  "https://ordo-*-hayredins-projects.vercel.app/**",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -227,12 +231,16 @@ enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
-# If enabled, users need to confirm their email address before signing in.
+# Confirmations are OFF deliberately. Supabase's built-in SMTP is capped at
+# `auth.rate_limit.email_sent` (2/hour, project-wide), so requiring a
+# confirmation email would make signup fail for everyone but the first person
+# each hour. Turn this back on the moment you configure [auth.email.smtp].
 enable_confirmations = false
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
-# Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+# Controls the minimum amount of time that must pass before sending another signup confirmation or
+# password reset email. Kept at a minute so nobody can use signup to spam a stranger's inbox.
+max_frequency = "1m0s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).

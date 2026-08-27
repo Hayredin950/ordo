@@ -8,25 +8,25 @@ A self-mentoring system: you define what you want to achieve at every time scale
 
 2. Core Concepts & Data Model
 
-Entity	Description
+Entity Description
 
-User	One account, multiple connected notification channels (Telegram, Slack, email, push)
+User One account, multiple connected notification channels (Telegram, Slack, email, push)
 
-Life Domain / Category	Health, Study, Work, Finance, Relationships, Spiritual, etc. — every goal and task belongs to one, so you can see balance, not just total completion
+Life Domain / Category Health, Study, Work, Finance, Relationships, Spiritual, etc. — every goal and task belongs to one, so you can see balance, not just total completion
 
-Goal Period	Year → Semester → Month → Week → Day. Each period has a target (what you want to achieve) and can be linked to its parent period (a week's goal rolls up into the month's)
+Goal Period Year → Semester → Month → Week → Day. Each period has a target (what you want to achieve) and can be linked to its parent period (a week's goal rolls up into the month's)
 
-Routine Template	The "default" schedule for a normal day — a set of time-blocked activities. Can be different per weekday (Mon–Fri routine vs. weekend routine), and overridden entirely for a specific date
+Routine Template The "default" schedule for a normal day — a set of time-blocked activities. Can be different per weekday (Mon–Fri routine vs. weekend routine), and overridden entirely for a specific date
 
-Task / Time Block	A single scheduled activity with start time, end time, category, linked goal, and a completion type: binary (done/not done) or percentage (partially done)
+Task / Time Block A single scheduled activity with start time, end time, category, linked goal, and a completion type: binary (done/not done) or percentage (partially done)
 
-Progress Log	Immutable record of what actually happened each day — this is what all charts and streaks are computed from, never the plan itself
+Progress Log Immutable record of what actually happened each day — this is what all charts and streaks are computed from, never the plan itself
 
-Streak / Habit Tracker	Consecutive days a specific recurring task was completed
+Streak / Habit Tracker Consecutive days a specific recurring task was completed
 
-Notification Rule	When and how you get pinged — before a task, when a task is missed, daily summary, weekly/monthly report
+Notification Rule When and how you get pinged — before a task, when a task is missed, daily summary, weekly/monthly report
 
-Reflection / Journal Entry	Optional free-text note attached to a day, week, or month — useful for the AI to generate better suggestions later
+Reflection / Journal Entry Optional free-text note attached to a day, week, or month — useful for the AI to generate better suggestions later
 
 Key design point you already got right: the routine template and the actual daily log are separate objects. The template says what should happen; the log says what did happen. This is what makes tracking and catch-up logic possible.
 
@@ -262,23 +262,23 @@ At this point the backlog spans every layer of a real product — core function,
 
 4. Suggested Architecture
 
-Layer	Recommendation	Why
+Layer Recommendation Why
 
-Backend API	Node.js (Express or NestJS) or Python (FastAPI)	Either works well; NestJS/FastAPI give you structure as this grows
+Backend API Node.js (Express or NestJS) or Python (FastAPI) Either works well; NestJS/FastAPI give you structure as this grows
 
-Database	PostgreSQL	Relational rollups (day→week→month→year) map naturally to SQL; also handles time-series progress logs well
+Database PostgreSQL Relational rollups (day→week→month→year) map naturally to SQL; also handles time-series progress logs well
 
-Web frontend	Next.js + Tailwind	Fast to build, good charting ecosystem (Recharts/Chart.js)
+Web frontend Next.js + Tailwind Fast to build, good charting ecosystem (Recharts/Chart.js)
 
-Mobile app	React Native (Expo)	Share business logic/types with the web app; or start as a installable PWA to delay native app cost
+Mobile app React Native (Expo) Share business logic/types with the web app; or start as a installable PWA to delay native app cost
 
-Bot layer	A separate "Notification Service" that talks to Telegram Bot API and Slack API through one internal interface	Adding a new channel later = one new adapter, not a rewrite
+Bot layer A separate "Notification Service" that talks to Telegram Bot API and Slack API through one internal interface Adding a new channel later = one new adapter, not a rewrite
 
-Scheduler	Cron jobs or a queue (e.g., BullMQ/Celery)	Needed for "send reminder at 6:55am", "send weekly report every Sunday 8pm"
+Scheduler Cron jobs or a queue (e.g., BullMQ/Celery) Needed for "send reminder at 6:55am", "send weekly report every Sunday 8pm"
 
-AI suggestions	Claude API call fed with: this week's plan, completion log, and any journal notes → returns redistribution plan + short reflection	Keep this as its own service so you can improve prompts without touching core app logic
+AI suggestions Claude API call fed with: this week's plan, completion log, and any journal notes → returns redistribution plan + short reflection Keep this as its own service so you can improve prompts without touching core app logic
 
-Authentication	Auth.js (NextAuth) or Firebase Auth, with Google + GitHub + Apple + email-magic-link providers	Standard OAuth flows out of the box; avoids hand-rolling password storage/security
+Authentication Auth.js (NextAuth) or Firebase Auth, with Google + GitHub + Apple + email-magic-link providers Standard OAuth flows out of the box; avoids hand-rolling password storage/security
 
 5. Suggested Build Order (Phased Roadmap)
 
@@ -339,33 +339,38 @@ Do you want the AI reflection to be purely observational, or should it be allowe
 ## What's implemented (all phases)
 
 **Phase 1 — MVP** ✅
+
 - Email/password, magic-link, GitHub + Google OAuth sign-in (env-gated)
 - Goals (year → day hierarchy), per-weekday routine templates, date overrides, daily log
 - Duplicate a day to another day / every weekday / any date range; simple weekly view + chart
 - Telegram bot: daily reminders, evening check-in with 0/25/50/75/100 buttons
 
 **Phase 2 — Full hierarchy + richer tracking** ✅
+
 - Month/semester/year goal levels with automatic rollup; partial completion (%)
 - GitHub-style consistency heatmap, category breakdown, 3-week trend
 - Missed-task debt tracking + named reusable templates
 
 **Phase 3 — Intelligence + polish** ✅
+
 - AI catch-up proposals + weekly reflection (Claude when `ANTHROPIC_API_KEY` is set, rule-based otherwise)
 - Slack as a second notification channel (per-user channel link, shared adapter)
 - Streaks (current + best), priority levels (must / nice)
 
 **Phase 4 — Multi-user & community** ✅
+
 - Public template library (publish, browse, copy)
 - Accountability pairing (see a peer's weekly % only), opt-in challenges + leaderboards
 - Focus timer, data export (JSON / CSV / iCal), onboarding checklist with progress bar
 
 **Also shipped (Sections H & I)** ✅
+
 - Year-in-review report, points, milestone badges, future-self letters (bot-delivered on deadline)
 - Version history / undo (last 30 snapshots), full account deletion, guest/demo mode (localStorage)
 
 ## Architecture
 
-There is no separate backend server. The database *is* the backend.
+There is no separate backend server. The database _is_ the backend.
 
 ```
 Browser ──supabase-js──▶ Supabase Postgres   (row level security enforces access)
@@ -385,13 +390,13 @@ Browser ──supabase-js──▶ Supabase Postgres   (row level security enfor
 - **Serverless routes** exist only for the few things that genuinely cannot run
   in the browser (they need the service role key or a third-party secret):
 
-  | Route | Purpose |
-  | --- | --- |
-  | `GET /api/health` | Which integrations are configured (drives the UI badges) |
-  | `GET /api/coach/weekly` | AI weekly reflection (Anthropic, RLS-scoped read) |
-  | `GET /api/coach/catchup` | AI catch-up proposal |
-  | `POST /api/telegram/webhook` | Telegram bot, verified by secret token header |
-  | `GET\|POST /api/cron/tick` | One idempotent scheduler pass, `Bearer $CRON_SECRET` |
+  | Route                        | Purpose                                                  |
+  | ---------------------------- | -------------------------------------------------------- |
+  | `GET /api/health`            | Which integrations are configured (drives the UI badges) |
+  | `GET /api/coach/weekly`      | AI weekly reflection (Anthropic, RLS-scoped read)        |
+  | `GET /api/coach/catchup`     | AI catch-up proposal                                     |
+  | `POST /api/telegram/webhook` | Telegram bot, verified by secret token header            |
+  | `GET\|POST /api/cron/tick`   | One idempotent scheduler pass, `Bearer $CRON_SECRET`     |
 
 - **Anything touching a secret lives in `src/lib/server/*.server.ts`.** TanStack's
   import protection rewrites `*.server.*` files to mocks in the client
@@ -427,7 +432,15 @@ supabase db push
 
 Then in the dashboard: **Authentication → URL Configuration** → set the site URL
 and add your Vercel domain to the redirect allow-list, and **Authentication →
-Providers** → enable GitHub and/or Google with their client id/secret.
+Providers** → enable GitHub and/or Google with their client id/secret. Both are
+also described in [`supabase/config.toml`](supabase/config.toml), so
+`supabase config push` applies them for you.
+
+**On email.** Supabase's built-in SMTP is capped at two emails per hour for the
+whole project, so email confirmation is turned off in `config.toml` (otherwise
+the third signup in an hour silently fails) and magic links are unreliable until
+you configure `[auth.email.smtp]` with your own sender. Password and OAuth
+sign-in are unaffected.
 
 What the migration sets up:
 
@@ -458,21 +471,21 @@ Copy [`.env.example`](.env.example) to `.env.local` for development and set the
 same keys on Vercel. Nothing here is required to boot — without Supabase the app
 runs on localStorage, and every integration degrades to "not configured".
 
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `VITE_SUPABASE_URL` | client + server | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | client + server | Public by design; RLS is what protects the data |
-| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | Bypasses RLS. Used by exactly two routes: the Telegram webhook and the cron tick |
-| `OAUTH_GITHUB`, `OAUTH_GOOGLE` | server | `1` to show the buttons on the login page. The providers themselves are configured in the Supabase dashboard |
-| `CRON_SECRET` | server | `Authorization: Bearer` value that `/api/cron/tick` requires. `openssl rand -hex 32` |
-| `ORDO_TZ_OFFSET_MINUTES` | server | Minutes to shift the schedule from UTC, so "07:00" means 07:00 where you are (`180` for UTC+3). Defaults to `0` |
-| `TELEGRAM_BOT_TOKEN` | server | From @BotFather |
-| `TELEGRAM_BOT_USERNAME` | server | Shown in the UI as the deep link to your bot |
-| `TELEGRAM_WEBHOOK_SECRET` | server | Must match the `secret_token` you register; the route 401s without it |
-| `SLACK_BOT_TOKEN` | server | Optional second channel; the bot must be invited to the channel |
-| `ANTHROPIC_API_KEY` | server | Optional. Without it the coach falls back to a rule-based report |
-| `ANTHROPIC_MODEL` | server | Defaults to `claude-sonnet-4-5-20250929` |
-| `VITE_API_URL` | client | Only if the frontend and API routes live on different origins. Empty = same origin |
+| Variable                       | Where           | Purpose                                                                                                         |
+| ------------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------- |
+| `VITE_SUPABASE_URL`            | client + server | Supabase project URL                                                                                            |
+| `VITE_SUPABASE_ANON_KEY`       | client + server | Public by design; RLS is what protects the data                                                                 |
+| `SUPABASE_SERVICE_ROLE_KEY`    | **server only** | Bypasses RLS. Used by exactly two routes: the Telegram webhook and the cron tick                                |
+| `OAUTH_GITHUB`, `OAUTH_GOOGLE` | server          | `1` to show the buttons on the login page. The providers themselves are configured in the Supabase dashboard    |
+| `CRON_SECRET`                  | server          | `Authorization: Bearer` value that `/api/cron/tick` requires. `openssl rand -hex 32`                            |
+| `ORDO_TZ_OFFSET_MINUTES`       | server          | Minutes to shift the schedule from UTC, so "07:00" means 07:00 where you are (`180` for UTC+3). Defaults to `0` |
+| `TELEGRAM_BOT_TOKEN`           | server          | From @BotFather                                                                                                 |
+| `TELEGRAM_BOT_USERNAME`        | server          | Shown in the UI as the deep link to your bot                                                                    |
+| `TELEGRAM_WEBHOOK_SECRET`      | server          | Must match the `secret_token` you register; the route 401s without it                                           |
+| `SLACK_BOT_TOKEN`              | server          | Optional second channel; the bot must be invited to the channel                                                 |
+| `ANTHROPIC_API_KEY`            | server          | Optional. Without it the coach falls back to a rule-based report                                                |
+| `ANTHROPIC_MODEL`              | server          | Defaults to `claude-sonnet-4-5-20250929`                                                                        |
+| `VITE_API_URL`                 | client          | Only if the frontend and API routes live on different origins. Empty = same origin                              |
 
 ## Scheduler
 
@@ -488,9 +501,11 @@ If a send fails, its `notification_log` claim is deleted so the next tick retrie
 Three ways to ping it, all supported at once:
 
 1. **GitHub Actions** — [`.github/workflows/cron.yml`](.github/workflows/cron.yml),
-   every 5 minutes. This is the one that gives you minute-level reminders. Add
+   every 5 minutes. This is the one that gives you minute-level reminders. Needs
    `ORDO_APP_URL` and `CRON_SECRET` as repository secrets
-   (*Settings → Secrets and variables → Actions*).
+   (_Settings → Secrets and variables → Actions_). Note that GitHub only
+   registers a workflow — and only honours its `schedule:` — from the
+   **default branch**, so this stays dormant until the workflow file is on `main`.
 2. **Vercel Cron** — registered at build time by
    [`scripts/vercel-crons.mjs`](scripts/vercel-crons.mjs), which patches
    `crons` into `.vercel/output/config.json` (`0 7 * * *`). Vercel injects the
@@ -515,29 +530,37 @@ curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
 ```
 
 To link an account: generate a code from the Telegram panel on the Today view,
-then send
-`/link <code>` to the bot. Commands: `/start`, `/link`, `/today`, `/status`,
-`/unlink`. The evening check-in's buttons write the completion % straight back
-into `user_state`.
+then send `/link <code>` to the bot. Commands: `/start`, `/link`, `/today`,
+`/status`, `/unlink`. The evening check-in's buttons write the completion %
+straight back into `user_state`.
 
 ## Deploying to Vercel
 
+Set the environment variables from the table above on the project, then:
+
 ```sh
-vercel login
 vercel link
-vercel env add VITE_SUPABASE_URL production      # …and the rest of the table above
 vercel --prod
 ```
 
-Or connect the GitHub repo in the Vercel dashboard and let it build on push.
-`bun run build` is the build command; the output is `.vercel/output` (Build Output
-API v3), which Vercel detects automatically.
+The build command is `bun run build` and the output is `.vercel/output`
+(Build Output API v3), which Vercel detects without any `vercel.json`.
+`VITE_*` values are inlined into the client bundle at build time, so they must be
+present on the project (or in `.env.local` for a local build) _before_ the build
+runs — changing them later requires a rebuild, not just a redeploy.
+
+**If a deployment comes back `BLOCKED`:** on the Hobby plan Vercel refuses any
+deployment whose tip commit was authored by someone other than the account owner,
+and it reads that author from local git even for CLI deploys. Either commit under
+the account owner's identity, or deploy the prebuilt output from a directory with
+no git metadata:
+
+```sh
+bun run build
+mkdir -p /tmp/deploy/.vercel && cp -r .vercel/output .vercel/project.json /tmp/deploy/.vercel/
+cd /tmp/deploy && vercel deploy --prebuilt --prod --archive=tgz
+```
 
 There is nothing to deploy on Render. The old `server/` Express app, its
 `render.yaml`, and the whole long-polling bot process are gone — replaced by RLS
 policies plus the five serverless routes above.
-
-
-
-
-
