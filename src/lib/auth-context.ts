@@ -1,6 +1,12 @@
 import { createContext, useContext } from "react";
 import type { HealthStatus } from "./api";
 
+/**
+ * Roles live in `profiles.role`. The client reads it to decide what to show; the
+ * database decides what may actually happen, through `public.is_admin()`.
+ */
+export type UserRole = "user" | "admin";
+
 export type User = {
   id: string;
   email: string;
@@ -8,6 +14,7 @@ export type User = {
   avatar_url: string;
   provider: string;
   created_at: string;
+  role: UserRole;
 };
 
 export type OAuthProvider = "github" | "google";
@@ -26,6 +33,8 @@ export type AuthContextValue = {
   health: HealthStatus["status"] | null;
   loading: boolean;
   configured: boolean;
+  /** Mirror of `profiles.role === "admin"`; decides what the UI offers, never what it may do. */
+  isAdmin: boolean;
   signup: (email: string, password: string, name?: string) => Promise<EmailStep>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;

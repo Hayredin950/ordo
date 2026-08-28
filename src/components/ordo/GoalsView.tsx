@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  CATEGORIES,
   addDays,
   newId,
   rangeScore,
@@ -9,6 +8,7 @@ import {
   type Goal,
   type OrdoState,
 } from "@/lib/ordo";
+import { useCategories } from "@/lib/categories";
 import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
 import type { FutureLetter } from "@/lib/db";
@@ -46,6 +46,7 @@ export function GoalsView({
   update: (fn: (s: OrdoState) => OrdoState) => void;
 }) {
   const { user } = useAuth();
+  const { categories } = useCategories();
   const [title, setTitle] = useState("");
   const [period, setPeriod] = useState<Goal["period"]>("week");
   const [category, setCategory] = useState<CategoryId>("study");
@@ -207,7 +208,7 @@ export function GoalsView({
                 onChange={(e) => setCategory(e.target.value as CategoryId)}
                 className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm sm:h-9"
               >
-                {CATEGORIES.map((c) => (
+                {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
                   </option>

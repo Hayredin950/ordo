@@ -11,7 +11,8 @@ import { serviceClient } from "./supabase.server";
 import { notifyUser, type Keyboard } from "./notify.server";
 import { generateWeeklyReport } from "./coach.server";
 import { buildCheckIn } from "./telegram.server";
-import { blocksForDay, dateKey, logForDay, type ServerState } from "./state.server";
+import { blocksForDay, dateKey, hourFormatFor, logForDay, type ServerState } from "./state.server";
+import { formatTime, formatTimeRange } from "../ordo";
 
 /** Vercel runs in UTC; set this when "07:00" should mean 07:00 somewhere else. */
 const OFFSET_MINUTES = Number(process.env["ORDO_TZ_OFFSET_MINUTES"] ?? 0) || 0;
@@ -122,6 +123,8 @@ export async function runTick(): Promise<TickResult> {
       const state = states.get(target.user_id) ?? {};
       const blocks = blocksForDay(state, today);
       const entries = logForDay(state, today);
+      // Each user's own clock preference, so a nag reads like the app does.
+      const format = hourFormatFor(state);
 
       // Morning brief — from 07:00 until noon, once per day.
       if (blocks.length && now.getHours() >= 7 && now.getHours() < 12) {
@@ -133,7 +136,7 @@ export async function runTick(): Promise<TickResult> {
           target,
           "morning",
           `🌅 Good morning. ${headline}\n\nFull plan:\n${blocks
-            .map((b) => `• ${b.start}–${b.end} ${b.title}`)
+            .map((b) => `• ${formatTimeRange(b.start, b.end, format)} ${b.title}`)
             .join("\n")}`,
         );
       }
@@ -145,7 +148,7 @@ export async function runTick(): Promise<TickResult> {
           await send(
             target,
             "pre",
-            `⏰ Starting soon: <b>${b.title}</b> (${b.start}–${b.end})`,
+            `⏰ Starting soon: <b>${b.title}</b> (${formatTimeRange(b.start, b.end, format)})`,
             b.id,
           );
         }
@@ -153,7 +156,7 @@ export async function runTick(): Promise<TickResult> {
           await send(
             target,
             "nag",
-            `🔔 <b>${b.title}</b> (${b.start}) passed unlogged. Log it or it becomes debt.`,
+            `🔔 <b>${b.title}</b> (${formatTime(b.start, format)}) passed unlogged. Log it or it becomes debt.`,
             b.id,
           );
         }

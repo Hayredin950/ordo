@@ -40,6 +40,9 @@ function toUser(session: Session, profile: Partial<User> | null): User {
     avatar_url: profile?.avatar_url || pick("avatar_url", "picture"),
     provider: profile?.provider || session.user.app_metadata?.provider || "email",
     created_at: profile?.created_at || session.user.created_at,
+    // Anything but an explicit "admin" row is a plain user; the database would
+    // refuse the privileged calls anyway, so guessing high is never safe here.
+    role: profile?.role === "admin" ? "admin" : "user",
   };
 }
 
@@ -62,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await requireSupabase()
         .from("profiles")
-        .select("email, name, avatar_url, provider, created_at")
+        .select("email, name, avatar_url, provider, created_at, role")
         .eq("id", session.user.id)
         .maybeSingle();
       if (sessionRef.current?.user.id === session.user.id) {
@@ -184,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       health,
       loading,
       configured: supabaseConfigured,
+      isAdmin: user?.role === "admin",
       signup,
       login,
       logout,

@@ -1,18 +1,61 @@
 import { useCallback, useEffect, useState } from "react";
+import { BUILTIN_CATEGORIES, type Category, type CategoryId } from "./categories";
 
-export type CategoryId = "health" | "study" | "work" | "finance" | "spiritual" | "relationships";
+/**
+ * Re-exported so the dozen modules that already import `CategoryId` from here
+ * keep working now that the category list itself lives in `categories.ts`.
+ */
+export type { CategoryId };
 
-export const CATEGORIES: { id: CategoryId; label: string; token: string }[] = [
-  { id: "health", label: "Health", token: "var(--cat-health)" },
-  { id: "study", label: "Study", token: "var(--cat-study)" },
-  { id: "work", label: "Work", token: "var(--cat-work)" },
-  { id: "finance", label: "Finance", token: "var(--cat-finance)" },
-  { id: "spiritual", label: "Spiritual", token: "var(--cat-spiritual)" },
-  { id: "relationships", label: "Relationships", token: "var(--cat-relationships)" },
-];
+/** How the app prints a wall-clock time. Chosen by the user, stored per account. */
+export type HourFormat = "24h" | "12h";
 
-export const catColor = (id: CategoryId) =>
-  CATEGORIES.find((c) => c.id === id)?.token ?? "var(--cat-work)";
+export type Settings = {
+  hourFormat: HourFormat;
+};
+
+export const DEFAULT_SETTINGS: Settings = { hourFormat: "24h" };
+
+/**
+ * First-run guess from the browser's own locale, so an en-US visitor sees
+ * "9:00 AM" before touching anything. Falls back to 24h during SSR.
+ */
+export function detectHourFormat(): HourFormat {
+  try {
+    return new Intl.DateTimeFormat().resolvedOptions().hour12 ? "12h" : "24h";
+  } catch {
+    return "24h";
+  }
+}
+
+/** Documents saved before settings existed have none — read through this. */
+export const settingsOf = (state: OrdoState | null | undefined): Settings => ({
+  ...DEFAULT_SETTINGS,
+  ...(state?.settings ?? {}),
+});
+
+export const hourFormatOf = (state: OrdoState | null | undefined): HourFormat =>
+  settingsOf(state).hourFormat;
+
+/** `"14:05"` → `"14:05"` or `"2:05 PM"`. Garbage in comes straight back out. */
+export function formatTime(hhmm: string, format: HourFormat = "24h"): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm?.trim() ?? "");
+  if (!m) return hhmm ?? "";
+  const hours = Number(m[1]);
+  const minutes = m[2]!;
+  if (!Number.isFinite(hours) || hours > 23) return hhmm;
+  if (format === "24h") return `${String(hours).padStart(2, "0")}:${minutes}`;
+  const suffix = hours < 12 ? "AM" : "PM";
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${minutes} ${suffix}`;
+}
+
+/** The pair as one label: `"09:00–10:30"` or `"9:00 AM – 10:30 AM"`. */
+export function formatTimeRange(start: string, end: string, format: HourFormat = "24h"): string {
+  return format === "24h"
+    ? `${formatTime(start, format)}–${formatTime(end, format)}`
+    : `${formatTime(start, format)} – ${formatTime(end, format)}`;
+}
 
 export type Block = {
   id: string;
@@ -44,6 +87,8 @@ export type OrdoState = {
   goals: Goal[];
   log: LogMap;
   journal: Record<string, string>;
+  /** Absent in documents written before preferences existed. */
+  settings?: Settings;
 };
 
 export const dateKey = (d: Date) =>
@@ -152,6 +197,7 @@ export const defaultState = (): OrdoState => {
     goals: seedGoals,
     log: seedLog(routine),
     journal: {},
+    settings: { ...DEFAULT_SETTINGS, hourFormat: detectHourFormat() },
   };
 };
 
@@ -177,7 +223,13 @@ export function useOrdo() {
     setState((s) => (s ? fn(s) : s));
   }, []);
 
-  return { state, update, reset: () => setState(defaultState()) };
+  // Reset wipes the plan and the log, not the preferences — the clock format is
+  // a display choice, not data the user asked to throw away.
+  const reset = useCallback(() => {
+    setState((prev) => ({ ...defaultState(), settings: settingsOf(prev) }));
+  }, []);
+
+  return { state, update, reset };
 }
 
 export function blocksFor(state: OrdoState, d: Date): Block[] {
@@ -224,7 +276,17 @@ export function streak(state: OrdoState, threshold = 70): { current: number; bes
   return { current, best };
 }
 
-export function categoryBreakdown(state: OrdoState, days = 28) {
+/**
+ * Mean completion per category over `days`. The category list is passed in
+ * because it is no longer a constant — an admin can add to it — and any id found
+ * in the plan but missing from the list is still reported, under its raw id, so
+ * a deleted category does not silently drop history.
+ */
+export function categoryBreakdown(
+  state: OrdoState,
+  days = 28,
+  cats: Pick<Category, "id" | "label">[] = BUILTIN_CATEGORIES,
+) {
   const acc: Record<string, { sum: number; n: number }> = {};
   for (let i = 0; i < days; i++) {
     const d = addDays(new Date(), -i);
@@ -235,7 +297,11 @@ export function categoryBreakdown(state: OrdoState, days = 28) {
       a.n += 1;
     }
   }
-  return CATEGORIES.map((c) => ({
+  const known = cats.map((c) => ({ id: c.id, label: c.label }));
+  const extra = Object.keys(acc)
+    .filter((id) => !known.some((c) => c.id === id))
+    .map((id) => ({ id, label: id }));
+  return [...known, ...extra].map((c) => ({
     category: c.label,
     id: c.id,
     value: acc[c.id]?.n ? Math.round(acc[c.id]!.sum / acc[c.id]!.n) : 0,
@@ -267,3 +333,18 @@ export const newBlock = (): Block => ({
 
 export const cloneBlocks = (blocks: Block[]) => blocks.map((x) => ({ ...x, id: uid() }));
 export const newId = uid;
+
+/**
+ * The clock preference without mounting the document hooks — for pages like the
+ * admin console that print times but have no business loading someone's plan.
+ * Falls back to the browser locale during SSR or before a first save.
+ */
+export function storedHourFormat(): HourFormat {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return hourFormatOf(JSON.parse(raw) as OrdoState);
+  } catch {
+    /* unreadable storage is not worth an error */
+  }
+  return detectHourFormat();
+}

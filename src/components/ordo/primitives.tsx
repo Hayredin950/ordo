@@ -1,4 +1,6 @@
-import { CATEGORIES, catColor, type CategoryId } from "@/lib/ordo";
+import { categoryColor, categoryLabel, findCategory, useCategories } from "@/lib/categories";
+import { iconFor } from "@/lib/category-icons";
+import type { CategoryId } from "@/lib/ordo";
 import { cn } from "@/lib/utils";
 
 export function Panel({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -38,27 +40,53 @@ export function PanelTitle({
 }
 
 export function CategoryDot({ id }: { id: CategoryId }) {
+  const { categories } = useCategories();
   return (
     <span
       className="inline-block size-2.5 shrink-0 rounded-full"
-      style={{ backgroundColor: catColor(id) }}
+      style={{ backgroundColor: categoryColor(categories, id) }}
       aria-hidden
     />
   );
 }
 
-export function CategoryPill({ id }: { id: CategoryId }) {
-  const label = CATEGORIES.find((c) => c.id === id)?.label ?? id;
+/**
+ * The category's lucide glyph, tinted to its colour. Falls back to a dot for an
+ * id the registry has never heard of, so a deleted category still renders.
+ */
+export function CategoryIcon({
+  id,
+  className,
+  colored = true,
+}: {
+  id: CategoryId;
+  className?: string;
+  colored?: boolean;
+}) {
+  const { categories } = useCategories();
+  const Icon = iconFor(findCategory(categories, id)?.icon ?? "Circle");
+  return (
+    <Icon
+      className={cn("size-4 shrink-0", className)}
+      style={colored ? { color: categoryColor(categories, id) } : undefined}
+      aria-hidden
+    />
+  );
+}
+
+export function CategoryPill({ id, icon = false }: { id: CategoryId; icon?: boolean }) {
+  const { categories } = useCategories();
+  const color = categoryColor(categories, id);
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
       style={{
-        backgroundColor: `color-mix(in oklab, ${catColor(id)} 18%, transparent)`,
-        color: catColor(id),
+        backgroundColor: `color-mix(in oklab, ${color} 18%, transparent)`,
+        color,
       }}
     >
-      <CategoryDot id={id} />
-      {label}
+      {icon ? <CategoryIcon id={id} className="size-3" colored={false} /> : <CategoryDot id={id} />}
+      {categoryLabel(categories, id)}
     </span>
   );
 }

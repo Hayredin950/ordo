@@ -7,6 +7,7 @@
  */
 import { dbError, sb } from "./supabase";
 import type { Block, OrdoState } from "./ordo";
+import type { CategoryRow } from "./categories";
 
 export type Peer = { id: string; name: string; email: string; weekly: number | null };
 
@@ -254,4 +255,162 @@ export async function unlinkSlack(userId: string): Promise<void> {
 export async function deleteAccount(): Promise<void> {
   const { error } = await sb().rpc("delete_account");
   if (error) throw dbError(error, "Could not delete the account");
+}
+
+// ---- Categories (read: everyone, write: admin by policy) ---------------------
+
+const CATEGORY_COLS = "id, label, color, icon, sort";
+
+export async function listCategories(): Promise<CategoryRow[]> {
+  const { data, error } = await sb()
+    .from("app_categories")
+    .select(CATEGORY_COLS)
+    .order("sort", { ascending: true });
+  if (error) throw dbError(error, "Could not load categories");
+  return (data ?? []) as CategoryRow[];
+}
+
+/**
+ * Insert-or-replace by id. The admin-write policy on `app_categories` is what
+ * actually stops a non-admin here; the UI hiding the form is only politeness.
+ */
+export async function upsertCategory(row: CategoryRow): Promise<CategoryRow> {
+  const { data, error } = await sb()
+    .from("app_categories")
+    .upsert(row, { onConflict: "id" })
+    .select(CATEGORY_COLS)
+    .single();
+  if (error) throw dbError(error, "Could not save the category");
+  return data as CategoryRow;
+}
+
+/** Deleting a row that overrode a built-in restores the code-defined default. */
+export async function deleteCategory(id: string): Promise<void> {
+  const { error } = await sb().from("app_categories").delete().eq("id", id);
+  if (error) throw dbError(error, "Could not delete the category");
+}
+
+// ---- Announcements ----------------------------------------------------------
+
+export type AnnouncementLevel = "info" | "warning" | "success";
+
+export type Announcement = {
+  id: string;
+  title: string;
+  body: string;
+  level: AnnouncementLevel;
+  active: boolean;
+  created_at: string;
+};
+
+const ANNOUNCEMENT_COLS = "id, title, body, level, active, created_at";
+
+/** Everyone gets the active ones; an admin also sees the retired ones. */
+export async function listAnnouncements(): Promise<Announcement[]> {
+  const { data, error } = await sb()
+    .from("announcements")
+    .select(ANNOUNCEMENT_COLS)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw dbError(error, "Could not load announcements");
+  return (data ?? []) as Announcement[];
+}
+
+export async function createAnnouncement(input: {
+  title: string;
+  body: string;
+  level: AnnouncementLevel;
+  userId: string;
+}): Promise<Announcement> {
+  const { data, error } = await sb()
+    .from("announcements")
+    .insert({
+      title: input.title,
+      body: input.body,
+      level: input.level,
+      created_by: input.userId,
+    })
+    .select(ANNOUNCEMENT_COLS)
+    .single();
+  if (error) throw dbError(error, "Could not post the announcement");
+  return data as Announcement;
+}
+
+export async function setAnnouncementActive(id: string, active: boolean): Promise<void> {
+  const { error } = await sb().from("announcements").update({ active }).eq("id", id);
+  if (error) throw dbError(error, "Could not update the announcement");
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  const { error } = await sb().from("announcements").delete().eq("id", id);
+  if (error) throw dbError(error, "Could not delete the announcement");
+}
+
+// ---- Admin ------------------------------------------------------------------
+// Every function below calls a SECURITY DEFINER routine that raises "Admins
+// only" for anyone else, so these throw rather than return empty for a
+// non-admin. Nothing here trusts the client.
+
+export type AdminSeriesPoint = { day: string; signups: number; active: number };
+
+export type AdminOverview = {
+  users: number;
+  admins: number;
+  new_7d: number;
+  documents: number;
+  active_24h: number;
+  active_7d: number;
+  categories: number;
+  challenges: number;
+  challenge_members: number;
+  pairings: number;
+  templates: number;
+  letters_pending: number;
+  telegram_linked: number;
+  slack_linked: number;
+  announcements: number;
+  notifications_7d: number;
+  avg_weekly: number;
+  series: AdminSeriesPoint[];
+};
+
+export async function adminOverview(): Promise<AdminOverview> {
+  const { data, error } = await sb().rpc("admin_overview");
+  if (error) throw dbError(error, "Could not load the admin overview");
+  return data as AdminOverview;
+}
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  provider: string;
+  role: "user" | "admin";
+  created_at: string;
+  last_active: string | null;
+  weekly: number | null;
+  telegram: boolean;
+  slack: boolean;
+  blocks: number;
+};
+
+export async function adminListUsers(search = "", limit = 50): Promise<AdminUser[]> {
+  const { data, error } = await sb().rpc("admin_list_users", {
+    p_search: search,
+    p_limit: limit,
+  });
+  if (error) throw dbError(error, "Could not load the user list");
+  return (data ?? []) as AdminUser[];
+}
+
+/** Refused server-side for self-demotion and for the founder address. */
+export async function adminSetRole(userId: string, role: "user" | "admin"): Promise<void> {
+  const { error } = await sb().rpc("admin_set_role", { p_user: userId, p_role: role });
+  if (error) throw dbError(error, "Could not change that role");
+}
+
+/** Library moderation: admins have a DELETE policy on `public_templates`. */
+export async function adminDeleteTemplate(id: string): Promise<void> {
+  const { error } = await sb().from("public_templates").delete().eq("id", id);
+  if (error) throw dbError(error, "Could not remove that template");
 }

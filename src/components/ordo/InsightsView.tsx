@@ -2,15 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   categoryBreakdown,
-  catColor,
   dateKey,
   dayScore,
   rangeScore,
   startOfWeek,
   streak,
-  type CategoryId,
   type OrdoState,
 } from "@/lib/ordo";
+import { categoryColor, useCategories } from "@/lib/categories";
 import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { apiFetch } from "@/lib/api";
@@ -30,11 +29,11 @@ import { Sparkles, Award, RefreshCw, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function YearInReview({ state }: { state: OrdoState }) {
+  const { categories } = useCategories();
   const days = 365;
   let sum = 0;
   let n = 0;
   let bestWeek = 0;
-  const catAcc: Record<string, { sum: number; n: number }> = {};
   for (let i = days - 1; i >= 0; i--) {
     const d = addDays(new Date(), -i);
     const s = dayScore(state, d);
@@ -48,7 +47,7 @@ function YearInReview({ state }: { state: OrdoState }) {
     const ws = rangeScore(state, from, 7);
     if (ws > bestWeek) bestWeek = ws;
   }
-  const cats = categoryBreakdown(state, 365);
+  const cats = categoryBreakdown(state, 365, categories);
   const mostConsistent = [...cats].sort((a, b) => b.value - a.value)[0];
   const avg = n ? Math.round(sum / n) : 0;
   const isNew = n < 7;
@@ -86,6 +85,7 @@ const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
 export function InsightsView({ state }: { state: OrdoState }) {
   const { user } = useAuth();
+  const { categories } = useCategories();
   const isMobile = useIsMobile();
   const heatRef = useRef<HTMLDivElement | null>(null);
   const [coach, setCoach] = useState<string | null>(null);
@@ -121,7 +121,7 @@ export function InsightsView({ state }: { state: OrdoState }) {
     return out;
   }, [state]);
 
-  const cats = useMemo(() => categoryBreakdown(state), [state]);
+  const cats = useMemo(() => categoryBreakdown(state, 28, categories), [state, categories]);
   const s = useMemo(() => streak(state), [state]);
   const month = rangeScore(state, addDays(new Date(), -29), 30);
   const trend = weekly.at(-1)!.value - weekly.at(-4)!.value;
@@ -310,7 +310,7 @@ export function InsightsView({ state }: { state: OrdoState }) {
               <span key={c.id} className="inline-flex items-center gap-1.5">
                 <span
                   className="size-2 rounded-full"
-                  style={{ backgroundColor: catColor(c.id as CategoryId) }}
+                  style={{ backgroundColor: categoryColor(categories, c.id) }}
                 />
                 {c.category} {c.value}%
               </span>

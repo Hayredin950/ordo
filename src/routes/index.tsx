@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
-import { rangeScore, startOfWeek } from "@/lib/ordo";
+import {
+  DEFAULT_SETTINGS,
+  hourFormatOf,
+  rangeScore,
+  startOfWeek,
+  type HourFormat,
+} from "@/lib/ordo";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
 import { useAuth } from "@/lib/auth-context";
 import { undoState } from "@/lib/db";
@@ -11,6 +17,8 @@ import { RoutineView } from "@/components/ordo/RoutineView";
 import { GoalsView } from "@/components/ordo/GoalsView";
 import { InsightsView } from "@/components/ordo/InsightsView";
 import { CommunityView } from "@/components/ordo/CommunityView";
+import { PreferencesPanel } from "@/components/ordo/PreferencesPanel";
+import { AnnouncementBanner } from "@/components/ordo/AnnouncementBanner";
 import { OnboardingChecklist } from "@/components/ordo/OnboardingChecklist";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
@@ -81,6 +89,14 @@ function OrdoApp() {
     }
   };
 
+  const setHourFormat = (hourFormat: HourFormat) => {
+    update((prev) => ({
+      ...prev,
+      settings: { ...DEFAULT_SETTINGS, ...prev.settings, hourFormat },
+    }));
+    toast.success(hourFormat === "24h" ? "Times now show as 24-hour" : "Times now show as AM/PM");
+  };
+
   if (!state) {
     return <div className="min-h-dvh" aria-busy="true" />;
   }
@@ -98,13 +114,21 @@ function OrdoApp() {
         onUndo={() => void undo()}
         onReset={reset}
         onExport={handleExport}
+        hourFormat={hourFormatOf(state)}
+        onHourFormat={setHourFormat}
       >
+        <AnnouncementBanner />
         <OnboardingChecklist state={state} />
         {tab === "Today" ? <TodayView state={state} update={update} /> : null}
         {tab === "Routine" ? <RoutineView state={state} update={update} /> : null}
         {tab === "Goals" ? <GoalsView state={state} update={update} /> : null}
         {tab === "Insights" ? <InsightsView state={state} /> : null}
-        {tab === "Community" ? <CommunityView /> : null}
+        {tab === "Community" ? (
+          <div className="space-y-4 sm:space-y-5">
+            <PreferencesPanel state={state} update={update} />
+            <CommunityView />
+          </div>
+        ) : null}
       </AppShell>
     </>
   );

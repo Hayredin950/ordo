@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "../lib/auth";
+import { CategoryProvider } from "../lib/categories-provider";
 
 function NotFoundComponent() {
   return (
@@ -140,8 +141,11 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        {/* Inside AuthProvider: the category rows are only readable with a session. */}
+        <CategoryProvider>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </CategoryProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

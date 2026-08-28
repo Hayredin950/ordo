@@ -4,6 +4,8 @@ import {
   blocksFor,
   dateKey,
   dayScore,
+  formatTimeRange,
+  hourFormatOf,
   missedDebt,
   streak,
   type OrdoState,
@@ -36,6 +38,7 @@ export function TodayView({
   const score = dayScore(state, day) ?? 0;
   const s = useMemo(() => streak(state), [state]);
   const debt = useMemo(() => missedDebt(state), [state]);
+  const hourFormat = hourFormatOf(state);
 
   const proposeCatchUp = async () => {
     if (!user) {
@@ -111,8 +114,14 @@ export function TodayView({
                   done ? "border-primary/30 bg-primary/5" : "border-border bg-background/40"
                 }`}
               >
-                <div className="font-display text-sm tabular-nums text-muted-foreground sm:w-24 sm:shrink-0">
-                  {blk.start}–{blk.end}
+                {/* The AM/PM form is roughly twice as wide as "09:00–10:30", so
+                    the column widens with the preference rather than wrapping. */}
+                <div
+                  className={`font-display text-sm tabular-nums text-muted-foreground sm:shrink-0 ${
+                    hourFormat === "12h" ? "sm:w-40" : "sm:w-24"
+                  }`}
+                >
+                  {formatTimeRange(blk.start, blk.end, hourFormat)}
                 </div>
                 <div className="mt-1 min-w-0 sm:mt-0 sm:flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -124,7 +133,7 @@ export function TodayView({
                     ) : null}
                   </div>
                   <div className="mt-1">
-                    <CategoryPill id={blk.category} />
+                    <CategoryPill id={blk.category} icon />
                   </div>
                 </div>
                 {/* Full-width segmented control on a phone (each target ≥44px),
@@ -223,7 +232,7 @@ export function TodayView({
           ) : null}
         </Panel>
 
-        <TelegramPanel />
+        <TelegramPanel hourFormat={hourFormat} />
 
         <FocusTimer />
       </div>

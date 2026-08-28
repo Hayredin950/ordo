@@ -1,10 +1,11 @@
 import { useState } from "react";
 import {
-  CATEGORIES,
   addDays,
   blocksFor,
   cloneBlocks,
   dateKey,
+  formatTime,
+  hourFormatOf,
   newBlock,
   newId,
   startOfWeek,
@@ -12,6 +13,7 @@ import {
   type CategoryId,
   type OrdoState,
 } from "@/lib/ordo";
+import { categoryColor, useCategories } from "@/lib/categories";
 import { CategoryPill, Panel, PanelTitle, SegButton } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +33,8 @@ export function RoutineView({
   update: (fn: (s: OrdoState) => OrdoState) => void;
 }) {
   const { user } = useAuth();
+  const { categories } = useCategories();
+  const hourFormat = hourFormatOf(state);
   const [dayIdx, setDayIdx] = useState(new Date().getDay());
   const [templateName, setTemplateName] = useState("");
   const [rangeDays, setRangeDays] = useState(30);
@@ -125,18 +129,22 @@ export function RoutineView({
               key={b.id}
               className="grid gap-2 rounded-lg border border-border bg-background/40 p-3 sm:flex sm:flex-wrap sm:items-center"
             >
+              {/* Wide enough for the widest thing a browser draws in here:
+                  "05:30 AM" plus the picker icon. The control is rendered from
+                  the OS locale, not from the app's clock preference, so it has
+                  to fit the 12-hour form even for a 24-hour reader. */}
               <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
                 <Input
                   value={b.start}
                   type="time"
-                  className="sm:w-28"
+                  className="sm:w-[8.5rem]"
                   aria-label="Start time"
                   onChange={(e) => patch(b.id, { start: e.target.value })}
                 />
                 <Input
                   value={b.end}
                   type="time"
-                  className="sm:w-28"
+                  className="sm:w-[8.5rem]"
                   aria-label="End time"
                   onChange={(e) => patch(b.id, { end: e.target.value })}
                 />
@@ -154,11 +162,16 @@ export function RoutineView({
                   onChange={(e) => patch(b.id, { category: e.target.value as CategoryId })}
                   className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm sm:h-9 sm:flex-none"
                 >
-                  {CATEGORIES.map((c) => (
+                  {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.label}
                     </option>
                   ))}
+                  {/* An id from a category that has since been deleted would
+                      otherwise silently reset the block to the first option. */}
+                  {categories.some((c) => c.id === b.category) ? null : (
+                    <option value={b.category}>{b.category}</option>
+                  )}
                 </select>
                 <button
                   type="button"
@@ -341,9 +354,9 @@ export function RoutineView({
                     {list.slice(0, 5).map((b) => (
                       <span
                         key={b.id}
-                        title={`${b.start} ${b.title}`}
+                        title={`${formatTime(b.start, hourFormat)} ${b.title}`}
                         className="h-1.5 w-full rounded-full"
-                        style={{ backgroundColor: `var(--cat-${b.category})` }}
+                        style={{ backgroundColor: categoryColor(categories, b.category) }}
                       />
                     ))}
                   </div>
@@ -352,8 +365,8 @@ export function RoutineView({
             })}
           </div>
           <div className="mt-3 flex flex-wrap gap-1">
-            {CATEGORIES.map((c) => (
-              <CategoryPill key={c.id} id={c.id} />
+            {categories.map((c) => (
+              <CategoryPill key={c.id} id={c.id} icon />
             ))}
           </div>
         </Panel>

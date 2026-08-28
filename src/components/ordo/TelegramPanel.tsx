@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
+import { formatTime, type HourFormat } from "@/lib/ordo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Panel, PanelTitle } from "./primitives";
@@ -18,7 +19,8 @@ type SlackStatus = {
   linked: { channel: string } | null;
 };
 
-export function TelegramPanel() {
+/** `hourFormat` only spells the nightly check-in time the way the user reads clocks. */
+export function TelegramPanel({ hourFormat = "24h" }: { hourFormat?: HourFormat }) {
   const { user, health } = useAuth();
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [code, setCode] = useState<string | null>(null);
@@ -169,7 +171,8 @@ export function TelegramPanel() {
             {status.linked.username ? ` (@${status.linked.username})` : ""}
           </p>
           <p className="text-muted-foreground">
-            You'll get 10-minute reminders, nags and the 21:00 check-in here.
+            You'll get 10-minute reminders, nags and the {formatTime("21:00", hourFormat)} check-in
+            here.
           </p>
           <Button
             variant="secondary"

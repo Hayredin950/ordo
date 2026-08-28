@@ -9,7 +9,15 @@
  */
 import { serviceClient } from "./supabase.server";
 import { telegramAdapter, telegramCall, type Keyboard } from "./notify.server";
-import { blocksForDay, computeStreak, dateKey, logForDay, type ServerState } from "./state.server";
+import {
+  blocksForDay,
+  computeStreak,
+  dateKey,
+  hourFormatFor,
+  logForDay,
+  type ServerState,
+} from "./state.server";
+import { formatTime, formatTimeRange } from "../ordo";
 
 export type TelegramUpdate = {
   update_id?: number;
@@ -59,7 +67,7 @@ export function buildCheckIn(
 
   const text = `🌙 Evening check-in — how did today go?\n\n${unlogged
     .slice(0, 5)
-    .map((b) => `• ${b.title} (${b.start})`)
+    .map((b) => `• ${b.title} (${formatTime(b.start, hourFormatFor(state))})`)
     .join("\n")}`;
 
   // One row per block: a label button, then the percentage buttons.
@@ -125,10 +133,11 @@ async function handleCommand(chatId: number, username: string, text: string): Pr
       const day = new Date();
       const blocks = blocksForDay(state, day);
       const entries = logForDay(state, day);
+      const format = hourFormatFor(state);
       const lines = blocks.map((b) => {
         const pct = entries[b.id] ?? 0;
         const mark = pct >= 100 ? "✅" : pct >= 50 ? "🟡" : "⬜";
-        return `${mark} ${b.start}–${b.end} ${b.title}`;
+        return `${mark} ${formatTimeRange(b.start, b.end, format)} ${b.title}`;
       });
       await telegramAdapter.send(
         chatId,

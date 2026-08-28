@@ -12,18 +12,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { ExportKind } from "@/lib/export";
+import type { HourFormat } from "@/lib/ordo";
 import {
   BarChart3,
   Bell,
   CalendarCheck,
   CalendarClock,
   CalendarPlus,
+  Clock,
   FileJson,
   FileSpreadsheet,
   LogIn,
   LogOut,
   MoreVertical,
   RotateCcw,
+  Shield,
   Sparkles,
   Target,
   Undo2,
@@ -55,6 +58,9 @@ type ShellProps = {
   onUndo: () => void;
   onReset: () => void;
   onExport: (kind: ExportKind) => void;
+  /** Current clock preference, and the one-tap way to flip it. */
+  hourFormat: HourFormat;
+  onHourFormat: (format: HourFormat) => void;
   children: ReactNode;
 };
 
@@ -89,8 +95,13 @@ function AccountMenu({
   onUndo,
   onReset,
   onExport,
-}: Pick<ShellProps, "undoBusy" | "onUndo" | "onReset" | "onExport">) {
-  const { user, logout } = useAuth();
+  hourFormat,
+  onHourFormat,
+}: Pick<
+  ShellProps,
+  "undoBusy" | "onUndo" | "onReset" | "onExport" | "hourFormat" | "onHourFormat"
+>) {
+  const { user, isAdmin, logout } = useAuth();
   if (!user) return null;
 
   return (
@@ -105,6 +116,22 @@ function AccountMenu({
           <p className="truncate text-sm font-medium">{user.name || user.email}</p>
           <p className="truncate text-xs text-muted-foreground">signed in with {user.provider}</p>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {isAdmin ? (
+          <>
+            <DropdownMenuItem asChild className="lg:hidden">
+              <Link to="/admin">
+                <Shield /> Admin console
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="lg:hidden" />
+          </>
+        ) : null}
+        {/* The full control lives in Community → Preferences; this is the shortcut
+            for the one setting people flip while looking at a schedule. */}
+        <DropdownMenuItem onSelect={() => onHourFormat(hourFormat === "24h" ? "12h" : "24h")}>
+          <Clock /> {hourFormat === "24h" ? "Switch to 12-hour (AM/PM)" : "Switch to 24-hour"}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="lg:hidden" disabled={undoBusy} onSelect={onUndo}>
           <Undo2 /> Undo last change
@@ -140,9 +167,11 @@ export function AppShell({
   onUndo,
   onReset,
   onExport,
+  hourFormat,
+  onHourFormat,
   children,
 }: ShellProps) {
-  const { user, health } = useAuth();
+  const { user, isAdmin, health } = useAuth();
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -170,12 +199,36 @@ export function AppShell({
                 {id}
               </button>
             ))}
+            {/* Not one of TABS: it is a separate page, and a sixth item would
+                overflow the phone's bottom bar. Admins get it inline here and as
+                an icon beside the account menu below `lg`. */}
+            {isAdmin ? (
+              <Link
+                to="/admin"
+                className="ml-1 flex items-center gap-1.5 rounded-md border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                <Shield className="size-3.5" /> Admin
+              </Link>
+            ) : null}
           </nav>
 
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <WeekScore value={week} />
             {user ? (
               <>
+                {isAdmin ? (
+                  <Link to="/admin" className="lg:hidden">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="tap text-primary"
+                      aria-label="Admin console"
+                      title="Admin console"
+                    >
+                      <Shield className="size-4" />
+                    </Button>
+                  </Link>
+                ) : null}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -202,6 +255,8 @@ export function AppShell({
                   onUndo={onUndo}
                   onReset={onReset}
                   onExport={onExport}
+                  hourFormat={hourFormat}
+                  onHourFormat={onHourFormat}
                 />
               </>
             ) : (

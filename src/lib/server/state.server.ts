@@ -4,6 +4,7 @@
  * reads routine/overrides/log/journal/goals, so it keeps its own narrow type.
  */
 import { userClient } from "./supabase.server";
+import type { HourFormat } from "../ordo";
 
 export type ServerBlock = {
   id: string;
@@ -20,7 +21,13 @@ export type ServerState = {
   log?: Record<string, Record<string, number>>;
   journal?: Record<string, string>;
   goals?: { id: string; title: string; period: string; target: number }[];
+  /** Only the clock preference matters out here — the nags print times. */
+  settings?: { hourFormat?: HourFormat };
 };
+
+/** Documents saved before the preference existed read as 24-hour. */
+export const hourFormatFor = (state: ServerState): HourFormat =>
+  state.settings?.hourFormat === "12h" ? "12h" : "24h";
 
 export const dateKey = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
