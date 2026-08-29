@@ -1,372 +1,68 @@
-# Daily Orbit
-
-do all at once [Ordo — Personal Accountability & Goal-Tracking System — Full Plan
-
-1. Vision
-
-A self-mentoring system: you define what you want to achieve at every time scale (year → semester → month → week → day → time-block), you log what actually happens, and the system holds you accountable — through hard data, charts, and nagging bots — instead of relying on motivation alone.
-
-2. Core Concepts & Data Model
-
-Entity Description
-
-User One account, multiple connected notification channels (Telegram, Slack, email, push)
-
-Life Domain / Category Health, Study, Work, Finance, Relationships, Spiritual, etc. — every goal and task belongs to one, so you can see balance, not just total completion
-
-Goal Period Year → Semester → Month → Week → Day. Each period has a target (what you want to achieve) and can be linked to its parent period (a week's goal rolls up into the month's)
-
-Routine Template The "default" schedule for a normal day — a set of time-blocked activities. Can be different per weekday (Mon–Fri routine vs. weekend routine), and overridden entirely for a specific date
-
-Task / Time Block A single scheduled activity with start time, end time, category, linked goal, and a completion type: binary (done/not done) or percentage (partially done)
-
-Progress Log Immutable record of what actually happened each day — this is what all charts and streaks are computed from, never the plan itself
-
-Streak / Habit Tracker Consecutive days a specific recurring task was completed
-
-Notification Rule When and how you get pinged — before a task, when a task is missed, daily summary, weekly/monthly report
-
-Reflection / Journal Entry Optional free-text note attached to a day, week, or month — useful for the AI to generate better suggestions later
-
-Key design point you already got right: the routine template and the actual daily log are separate objects. The template says what should happen; the log says what did happen. This is what makes tracking and catch-up logic possible.
-
-3. Features — Organized by What You Asked For + What's Missing
-
-A. Planning (what you described)
-
-Set goals at year / semester / month / week / day level, each optionally linked to the level above
-
-Define a default weekly routine (same schedule every day, or different per day)
-
-Override any specific date with a custom schedule (holidays, travel, exam day)
-
-Time-blocked daily schedule (start–end time per activity)
-
-Duplicate / apply a schedule — take any day's schedule (including a special/override day) and:
-
-copy it to one or more specific other days of the week
-
-apply it across an entire week
-
-apply it as the standing routine for a whole month
-
-apply it across any custom date range (e.g. "this exact schedule from June 1 to Aug 30" for a semester)
-
-This is really a small "template" object under the hood — a day's schedule can be saved as a named template and applied to any date/range, not just copied ad hoc. That also gives you the templates-library feature for free (Section F).
-
-B. Tracking (what you described + gaps)
-
-Mark tasks done / not done or partially done with a percentage — needed for tasks like "read 50 pages" where you read 30
-
-Auto-rollup: a day's completion % automatically feeds into the week's, which feeds into the month's, which feeds into the year's — you see progress at every zoom level without manual re-entry
-
-Missed-task "debt" tracking: when something is skipped, it doesn't just vanish — it's flagged and carried forward until resolved or explicitly dropped
-
-Streaks: consecutive days a habit was kept, and longest streak ever (this is a strong psychological motivator you didn't mention but will want)
-
-C. Visualization (what you described + gaps)
-
-Completion-rate charts by day / week / month / semester / year
-
-Heatmap calendar (like GitHub's contribution graph) — one glance shows your whole year's consistency
-
-Category breakdown (are you crushing "Work" but ignoring "Health"?)
-
-Trend line: are you improving or declining over the last N weeks?
-
-D. Notifications (what you described + gaps)
-
-Reminder before a task starts ("in 10 minutes: study")
-
-Nag when a task's time passes and it's not marked done
-
-Daily summary — morning ("here's today") and evening ("here's how today went")
-
-Weekly / monthly report — sent automatically, no need to open the app
-
-Multi-channel: Telegram first, Slack as a second option (both can share one internal "notification service" so adding Discord/email later is cheap)
-
-Snooze / reschedule a task directly from the chat (reply to the bot instead of opening the app)
-
-E. Catch-up & AI Suggestions (what you described + gaps)
-
-When you fall behind, the system proposes a redistribution: e.g. "you missed 3 study sessions this week — here's how to fit them into the next 4 days without breaking your other commitments"
-
-AI weekly/monthly review: a short generated reflection — what went well, what consistently gets skipped, one suggested adjustment for next week (this is closer to actual "mentoring" than a static % chart)
-
-Pattern detection: "you complete 90% of morning tasks but only 40% of evening tasks — consider moving X earlier"
-
-F. Features you didn't mention but will likely want
-
-Journaling / notes per day — short reflection field; makes the AI suggestions much better
-
-Priority levels on tasks (must-do vs. nice-to-have) so catch-up logic knows what to sacrifice first
-
-Templates library — save a routine ("exam week schedule") and reuse it later instead of rebuilding
-
-Google Calendar sync (optional) — so time blocks show up where you already look
-
-Focus/Pomodoro timer built into a task — many people in "discipline system" apps ask for this eventually
-
-Data export (CSV / PDF monthly report) — useful for genuine year-end review
-
-Accountability sharing — optional: let a friend or mentor see your weekly % (you said you don't have a mentor yet — this future-proofs for when you do, or lets a friend fill that role)
-
-Offline support on mobile — log completion without signal, sync later
-
-Multi-timezone handling — only matters if you travel, but cheap to design in now, expensive to retrofit later
-
-G. Multi-User Platform & Social Login
-
-Turning this from "my personal tool" into "something other people sign up for" changes several decisions early, so it's worth locking in now rather than retrofitting later.
-
-Social sign-in: Google and GitHub both have straightforward, standard OAuth login — easy to add via a library like NextAuth/Auth.js or Firebase Auth (one line of config each). Instagram is a real limitation: Instagram doesn't offer a general "Sign in with Instagram" for third-party apps the way Google/GitHub do — its API access is scoped to content/media permissions, not identity login. Apple and email/password (with magic link) are the more realistic third and fourth options if you want broader reach.
-
-Per-user data isolation: every goal, template, and log row is scoped to a user_id — this is mostly a schema decision made once at the start, cheap now, painful to add later
-
-Public/shareable templates: users can optionally publish a routine template ("Med Student Study Routine", "Marathon Training Plan") to a shared library others can browse and duplicate into their own account
-
-Privacy controls: default everything private; user explicitly opts in to share a specific goal, streak, or weekly % with another named user (a friend, or a real mentor)
-
-Accountability pairing: two users can link accounts so each sees the other's completion %, not the task details — lightweight peer accountability without full social-network exposure
-
-Opt-in leaderboards / challenges: e.g. a 30-day challenge others can join, ranked by completion rate — strong engagement driver, but keep it opt-in since forced competition undermines the "personal mentor" feel
-
-Plans/tiers: if this becomes public, decide early whether it's free, freemium (AI suggestions behind a paywall), or subscription — affects how much you invest in the AI-suggestion cost per user
-
-Onboarding flow: a first-time wizard that walks a new user through setting their first weekly routine and first goal — the single biggest driver of whether a new signup actually sticks around
-
-H. "Make It Amazing" — Standout Features
-
-Motivation & engagement
-
-Year-in-review report — an auto-generated, visual end-of-year (and end-of-month) summary: total completion %, best streak, most consistent category, biggest turnaround week — a "Spotify Wrapped" for your discipline
-
-Points & levels, not just streaks — small dopamine loop for consistency, optional to disable if it feels gimmicky to you
-
-"Future self" letter — write a note to yourself when you set a year/semester goal, sealed until that goal's deadline, delivered automatically via bot when it's reached
-
-Milestone badges — 7-day streak, 30-day streak, "comeback" badge for recovering after a bad week (rewards resilience, not just perfection)
-
-Smart / AI capabilities
-
-Conversational daily check-in — instead of a flat "did you do X? yes/no" button, the Telegram bot can hold a short natural check-in ("How'd the study session go?" → you reply in your own words → it logs completion % and a note automatically)
-
-Auto-build a first routine — describe your goals in plain language and let AI draft a starting weekly schedule you then tweak, instead of building it from a blank grid
-
-Smart notification timing — learns when you actually respond/act on reminders and gradually shifts nudge times to your real patterns instead of a fixed clock time
-
-Task dependencies — mark that Task B can't be started until Task A is done, useful for study plans or project-based goals
-
-Integrations
-
-Wearable/health sync (Apple Health / Google Fit) — auto-mark a workout task complete if it detects matching activity, removing manual logging friction for fitness goals
-
-Calendar sync (already noted) plus weather-aware rescheduling for outdoor tasks
-
-Webhook/API access — lets power users connect the tracker to Zapier/IFTTT for their own workflows
-
-Productivity-tool sync (Notion, Linear, Asana) — Ordo becomes the accountability/scheduling layer on top of tools you already work in, instead of a fifth place to check:
-
-Notion: two-way sync of a database — a Notion page/row can represent a goal or task; marking it done in Notion marks it done in Ordo and vice versa; daily/weekly logs can also be pushed to a Notion page as a running journal
-
-Linear: pull assigned issues in as tasks on your daily schedule (e.g. "Linear issue ENG-123" shows up as a time-blocked task); completing the issue in Linear auto-completes it in Ordo — useful if your "work" category is really software work
-
-Asana: same pattern — import Asana tasks with due dates directly into the relevant day/week, sync completion status both ways
-
-Build this as one internal "Integration Adapter" interface (same pattern as the Notification Service) — each tool (Notion/Linear/Asana/others later) is just a plugin that maps their task object to Ordo's task object, so adding e.g. Jira or Trello later is cheap
-
-Decide per-user which categories/projects sync automatically vs. which stay Ordo-only (you likely don't want every personal habit cluttering a work tool, or vice versa)
-
-Personalization
-
-Custom themes, and a daily motivational quote or an AI-generated one-line nudge tailored to your current streak/category struggles
-
-Multi-language support if you want this to reach non-English speakers eventually
-
-Reporting
-
-Shareable progress cards (image export of a week/month's heatmap) — useful if you want to post accountability updates publicly or to a mentor/friend
-
-Not all of these belong in Phase 1 — they're here so nothing gets lost, and you can pull individual ones forward whenever they fit a phase.
-
-Advanced (further round — use selectively, not all at once)
-
-Streak freeze — one "pass" per week/month that protects a streak from a single missed day without lying about it in the data (Duolingo-style; prevents one bad day from causing total motivation collapse)
-
-Adaptive targets — AI notices if a goal is consistently too easy (100% for 3 weeks straight) or too hard (under 30% for 3 weeks) and proposes adjusting it, rather than letting you either coast or burn out
-
-Coach persona setting — choose the tone of your check-ins and nags: strict/direct, gentle/encouraging, or neutral/data-only — since "mentor" tone matters a lot for whether nagging helps or annoys you
-
-Cross-category correlation insights — e.g. "your study completion drops 40% on days you sleep under 6 hours" — turns raw logs into actual self-knowledge, not just a scoreboard
-
-Commitment stakes (advanced, optional) — pledge a small real consequence (e.g. a note to a friend, or integration with a stakes service) if a goal is missed — genuinely increases follow-through for some people, but adds complexity and isn't for everyone
-
-Accountability cohorts — small groups (not just 1:1 pairing) who see each other's weekly % and can nudge each other
-
-iCal import/export — two-way sync with any calendar app, not just Google
-
-Public shareable profile — optional page showing your streaks/badges, for people who want external accountability
-
-A Note on Scope
-
-You now have a genuinely complete feature backlog — planning hierarchy, tracking, charts, notifications, AI catch-up, duplication/templates, multi-user auth, and two rounds of "amazing" differentiators. That's easily 12+ months of feature work if built all at once.
-
-The risk at this point isn't missing a good idea — it's that an ever-growing feature list becomes its own procrastination, which would be ironic for an app whose whole purpose is fighting procrastination. Every feature above is now captured in the plan, so nothing is lost by not building it yet.
-
-My honest recommendation: pick 3–5 features from this entire document that matter most to you personally, lock those as your real Phase 1, and start building. Everything else stays in the backlog for later phases — it's already written down, so it can't be forgotten.
-
-I. Reliability, Accessibility & Growth
-
-Reliability & data safety
-
-Version history / undo — recover an accidentally deleted goal or overwritten routine instead of losing it permanently
-
-Real-time multi-device sync with conflict resolution — if you edit today's schedule on phone and web at the same time, define which change wins (last-write-wins is simplest to start)
-
-Automatic backups and a documented restore process
-
-Two-factor authentication for account security, especially once it's multi-user
-
-GDPR-style data controls — full data export and full account deletion, needed the moment this has real users beyond you
-
-Accessibility & usability
-
-Screen-reader support and colorblind-safe chart palettes — charts (heatmaps especially) are the first thing to break for colorblind users if not designed carefully
-
-Natural-language task entry — type "workout every day at 6am except Sunday" and have it parsed into a recurring schedule instead of clicking through a form
-
-Onboarding checklist for first-time users (set first goal → build first routine → connect Telegram → done) with a visible progress bar for the onboarding itself
-
-Guest/demo mode — let a new visitor try the app with sample data before creating an account, lowers signup friction
-
-Access beyond the primary channel
-
-SMS fallback notifications for moments without a reliable Telegram/internet connection
-
-Location-based reminders (geofencing) — e.g. auto-nudge "log your gym session" when you arrive at the gym
-
-Voice assistant shortcuts (Siri/Google Assistant) — "Hey Siri, mark my workout done" without opening the app
-
-Growth & monetization (relevant once multi-user)
-
-Referral system — invite a friend, both get a perk (e.g. AI suggestions unlocked for a period)
-
-Mentor/coach marketplace — optional paid tier where real human coaches can view a client's dashboard and leave comments, turning the "I don't have a mentor yet" problem into a feature for other users too
-
-Admin/support dashboard — needed once you have real users who hit bugs or need account help
-
-Print-friendly weekly planner export — for people who still want a paper backup of their week
-
-At this point the backlog spans every layer of a real product — core function, intelligence, growth, and operations. It's all captured in this document, so whenever you're ready to prioritize, nothing has to be reconstructed from memory.
-
-4. Suggested Architecture
-
-Layer Recommendation Why
-
-Backend API Node.js (Express or NestJS) or Python (FastAPI) Either works well; NestJS/FastAPI give you structure as this grows
-
-Database PostgreSQL Relational rollups (day→week→month→year) map naturally to SQL; also handles time-series progress logs well
-
-Web frontend Next.js + Tailwind Fast to build, good charting ecosystem (Recharts/Chart.js)
-
-Mobile app React Native (Expo) Share business logic/types with the web app; or start as a installable PWA to delay native app cost
-
-Bot layer A separate "Notification Service" that talks to Telegram Bot API and Slack API through one internal interface Adding a new channel later = one new adapter, not a rewrite
-
-Scheduler Cron jobs or a queue (e.g., BullMQ/Celery) Needed for "send reminder at 6:55am", "send weekly report every Sunday 8pm"
-
-AI suggestions Claude API call fed with: this week's plan, completion log, and any journal notes → returns redistribution plan + short reflection Keep this as its own service so you can improve prompts without touching core app logic
-
-Authentication Auth.js (NextAuth) or Firebase Auth, with Google + GitHub + Apple + email-magic-link providers Standard OAuth flows out of the box; avoids hand-rolling password storage/security
-
-5. Suggested Build Order (Phased Roadmap)
-
-Phase 1 — MVP (get you actually using it fast)
-
-Auth: Google + GitHub sign-in from day one (cheap to add now, expensive to bolt on later)
-
-Data model: goals (week/day only, skip year/semester for now), routine template, daily log, per-user isolation
-
-Web app: create routine, duplicate a day's schedule to other days/a week/a month, mark tasks done/not done, simple weekly view
-
-Telegram bot: daily reminder + evening "did you do X?" check-in
-
-Basic weekly completion % chart
-
-Phase 2 — Full hierarchy + richer tracking
-
-Add month/semester/year goal levels with rollup
-
-Partial completion (%) support
-
-Heatmap calendar, category breakdown
-
-Missed-task debt tracking
-
-Named, reusable templates (save any schedule, apply to any future date range)
-
-Phase 3 — Intelligence + polish
-
-AI catch-up suggestions and weekly reflection
-
-Slack channel support
-
-Streaks, priority levels
-
-Mobile app (React Native) once the web data model is stable
-
-Phase 4 — Multi-user & community
-
-Public template library, accountability pairing, opt-in leaderboards/challenges
-
-Plan/tier decisions if opening to the public
-
-Calendar sync, focus timer, data export
-
-Starting at Phase 1 with just Telegram + a simple web view means you're actually using the system within days, not months — and every later phase builds on real usage data instead of guesses.
-
-6. Open Decisions to Make Before Building
-
-Do you want one single "life routine" or separate routines per category (e.g., a work routine and a personal routine tracked independently)?
-
-For missed tasks — should the system auto-reschedule them, or always ask you to confirm first?
-
-How strict should "partially done" be — free-form % entry, or fixed steps (25/50/75/100)?
-
-Do you want the AI reflection to be purely observational, or should it be allowed to be blunt/critical in tone?]
-
-## What's implemented (all phases)
-
-**Phase 1 — MVP** ✅
-
-- Email/password, magic-link, GitHub + Google OAuth sign-in (env-gated)
-- Goals (year → day hierarchy), per-weekday routine templates, date overrides, daily log
-- Duplicate a day to another day / every weekday / any date range; simple weekly view + chart
-- Telegram bot: daily reminders, evening check-in with 0/25/50/75/100 buttons
-
-**Phase 2 — Full hierarchy + richer tracking** ✅
-
-- Month/semester/year goal levels with automatic rollup; partial completion (%)
-- GitHub-style consistency heatmap, category breakdown, 3-week trend
-- Missed-task debt tracking + named reusable templates
-
-**Phase 3 — Intelligence + polish** ✅
-
-- AI catch-up proposals + weekly reflection (Claude when `ANTHROPIC_API_KEY` is set, rule-based otherwise)
-- Slack as a second notification channel (per-user channel link, shared adapter)
-- Streaks (current + best), priority levels (must / nice)
-
-**Phase 4 — Multi-user & community** ✅
-
-- Public template library (publish, browse, copy)
-- Accountability pairing (see a peer's weekly % only), opt-in challenges + leaderboards
-- Focus timer, data export (JSON / CSV / iCal), onboarding checklist with progress bar
-
-**Also shipped (Sections H & I)** ✅
-
-- Year-in-review report, points, milestone badges, future-self letters (bot-delivered on deadline)
-- Version history / undo (last 30 snapshots), full account deletion, guest/demo mode (localStorage)
+# Ordo
+
+A personal accountability system. You define what you want at every time scale —
+year, semester, month, week, day, time block — log what actually happens, and the
+app holds you to it with charts, streaks and a bot that nags.
+
+Live at **[ordo-core.vercel.app](https://ordo-core.vercel.app)**.
+
+The plan and the log are deliberately separate objects: a routine template says
+what _should_ happen, the daily log says what _did_. Every score, streak and chart
+is computed from the log, never from the plan.
+
+## What it does
+
+**Plan** — goals from year down to day, each level rolling up into the one above. A
+default routine per weekday, any single date overridable, and any day's schedule
+copyable to another day, to every weekday, or across an arbitrary date range.
+Schedules worth keeping can be saved as named templates.
+
+**Track** — mark a block done, or partially at 25 / 50 / 75 / 100. Must-do versus
+nice-to-have priority, missed-block debt that carries forward instead of vanishing,
+current and best streak.
+
+**See** — weekly completion, a GitHub-style consistency heatmap, category
+breakdown, a three-week trend line, and a year-in-review.
+
+**Get nagged** — over Telegram or Slack: a morning brief, a reminder before a block
+starts, a nag when a must-do passes unlogged, an evening check-in whose buttons
+write completion straight back into the document, and a weekly report. Future-self
+letters are sealed when you set a goal and delivered by the bot on its deadline.
+
+**Reflect** — an AI catch-up proposal and weekly reflection, written by Claude when
+`ANTHROPIC_API_KEY` is set and by a rule-based fallback when it is not.
+
+**Share, if you want to** — publish a routine to the public template library, pair
+with someone to see each other's weekly percentage (never task details), or join an
+opt-in challenge with a leaderboard.
+
+**Preferences** — 24-hour or 12-hour clock, stored on the account rather than in
+the browser, honoured everywhere the app or the bot prints a time.
+
+Signed out, everything runs on `localStorage` as a demo. Signing in syncs the same
+document per-user to Postgres. Every integration degrades to "not configured" in
+the UI instead of breaking.
+
+## Admin console
+
+`/admin`, visible only to accounts whose `profiles.role` is `admin`. Five sections:
+an overview of signups, activity and per-integration counts; the category editor;
+the user list with promote/demote; announcements shown as a banner to every
+signed-in user; and moderation of the public template library.
+
+The client-side guard is cosmetic. Every call the console makes is either an
+admin-only RLS policy or a `SECURITY DEFINER` function that raises `Admins only`,
+so a non-admin who reached the page would see a screen of errors rather than
+anybody's data. `admin_set_role` additionally refuses self-demotion and refuses to
+demote the founder address, so the last admin cannot lock everyone out.
+
+**Categories are data, not a constant.** The six built-ins (Health, Study, Work,
+Finance, Spiritual, Relationships) live in `src/lib/categories.ts` so a signed-out
+browser still renders. A row in `app_categories` with the same id overrides one; a
+row with a new id adds one, with any CSS colour and any icon from the lucide
+registry. Deleting an override restores the built-in. A block filed under a
+category that has since been deleted keeps its id and renders unlabelled rather
+than silently jumping to another category.
 
 ## Architecture
 
@@ -383,12 +79,12 @@ Browser ──supabase-js──▶ Supabase Postgres   (row level security enfor
 
 - **Frontend + SSR: Vercel only.** Nitro's `vercel` preset emits Build Output API
   v3 into `.vercel/output/`.
-- **Data + auth: Supabase.** Every read and write goes straight from the browser
-  to Postgres through `supabase-js`. Access control lives in RLS policies, not in
+- **Data + auth: Supabase.** Every read and write goes straight from the browser to
+  Postgres through `supabase-js`. Access control lives in RLS policies, not in
   application code, so there is nothing to trust on the client. Supabase Auth
-  handles email/password, magic links, and GitHub/Google OAuth.
-- **Serverless routes** exist only for the few things that genuinely cannot run
-  in the browser (they need the service role key or a third-party secret):
+  handles email/password, 6-digit code verification and GitHub/Google OAuth.
+- **Serverless routes** exist only for the few things that genuinely cannot run in
+  the browser, because they need the service role key or a third-party secret:
 
   | Route                        | Purpose                                                  |
   | ---------------------------- | -------------------------------------------------------- |
@@ -399,30 +95,31 @@ Browser ──supabase-js──▶ Supabase Postgres   (row level security enfor
   | `GET\|POST /api/cron/tick`   | One idempotent scheduler pass, `Bearer $CRON_SECRET`     |
 
 - **Anything touching a secret lives in `src/lib/server/*.server.ts`.** TanStack's
-  import protection rewrites `*.server.*` files to mocks in the client
-  environment, so a stray import fails loudly instead of shipping a key.
+  import protection rewrites `*.server.*` files to mocks in the client environment,
+  so a stray import fails loudly instead of shipping a key.
 
 ## Development
 
 ```sh
 bun install
-cp .env.example .env.local   # fill in at least VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+cp .env.example .env.local   # at minimum VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 bun run dev                  # http://localhost:5173
 ```
 
-Signed out, the app runs entirely on localStorage (guest/demo mode). Sign in and
-the same data syncs per-user to Supabase; every integration below degrades to
-"not configured" in the UI rather than breaking.
-
 ```sh
 bun run typecheck   # tsc --noEmit
-bun run lint        # eslint .
+bun run lint        # eslint . (prettier runs as a rule, so formatting fails here)
 bun run build       # vite build + register the Vercel cron
 ```
 
+`src/routeTree.gen.ts` is generated by the router plugin during dev and build. A
+newly added route file will not typecheck until one of them has run.
+
 ## Supabase setup
 
-The whole schema is one migration: [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql).
+Three migrations, in [`supabase/migrations/`](supabase/migrations): the schema, a
+`pgcrypto`-free rewrite of the Telegram code minting, and the admin role with its
+categories and announcements.
 
 ```sh
 supabase login
@@ -431,95 +128,100 @@ supabase db push
 ```
 
 Then in the dashboard: **Authentication → URL Configuration** → set the site URL
-and add your Vercel domain to the redirect allow-list, and **Authentication →
-Providers** → enable GitHub and/or Google with their client id/secret. Both are
-also described in [`supabase/config.toml`](supabase/config.toml), so
+and add your domain to the redirect allow-list, and **Authentication → Providers** →
+enable GitHub and/or Google with their client id and secret. Both are also
+described in [`supabase/config.toml`](supabase/config.toml), so
 `supabase config push` applies them for you.
 
-**The OAuth callback belongs to Supabase, not to this app.** Supabase brokers the
-whole flow, so the callback you register with the provider is
+**Careful with `supabase config push`.** It writes the whole auth config, including
+`external.*.secret`. Export `SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID`,
+`SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET` and the two Google equivalents first, or the
+push overwrites your working OAuth credentials with empty strings.
+
+### The OAuth callback belongs to Supabase, not to this app
+
+Supabase brokers the whole flow, so the callback you register with the provider is
 
 ```
 https://<your-project-ref>.supabase.co/auth/v1/callback
 ```
 
-and _not_ a URL on your own domain. Pointing it at the app (or at a leftover API
-host) fails with `redirect_uri_mismatch` from Google or "The redirect_uri MUST
-match the registered callback URL" from GitHub. Set it in **GitHub → Settings →
-Developer settings → OAuth Apps → Authorization callback URL** and in **Google
-Cloud Console → Credentials → your OAuth client → Authorised redirect URIs**;
-Google's _Authorised JavaScript origins_ is a separate field and filling only
-that one is not enough. You can check what Supabase actually sends with
+and _not_ a URL on your own domain. Pointing it at the app fails with
+`redirect_uri_mismatch` from Google, or "The redirect_uri MUST match the registered
+callback URL" from GitHub. Set it under **GitHub → Settings → Developer settings →
+OAuth Apps → Authorization callback URL** and **Google Cloud Console → Credentials
+→ your OAuth client → Authorised redirect URIs**. Google's _Authorised JavaScript
+origins_ is a separate field; filling only that one is not enough.
+
+To see what Supabase actually sends:
 
 ```sh
 curl -sD - -o /dev/null \
   "https://<your-project-ref>.supabase.co/auth/v1/authorize?provider=github"
 ```
 
-— the `Location` header shows the `client_id` and `redirect_uri` in play.
+The `Location` header shows the `client_id` and `redirect_uri` in play.
 
-**On email, and why it needs your own SMTP.** Ordo's sign-in and signup screens
-both verify a **6-digit code** (`supabase.auth.verifyOtp`), not a clickable link,
-so the user never leaves the tab they started in. Supabase generates that code
-either way — but its stock email templates print `{{ .ConfirmationURL }}` instead
-of `{{ .Token }}`, and a free-tier project on Supabase's built-in email provider
-is not allowed to change them:
+### Email verification needs your own SMTP
+
+Sign-in and signup both verify a **6-digit code** (`supabase.auth.verifyOtp`), not a
+clickable link, so the user never leaves the tab they started in. Supabase generates
+that code either way — but its stock templates print `{{ .ConfirmationURL }}`
+instead of `{{ .Token }}`, and a free-tier project on the built-in email provider
+may not change them:
 
 ```
 400 Email template modification is not available for free tier projects
     using the default email provider.
 ```
 
-Configuring `[auth.email.smtp]` with any sender of your own lifts that
-restriction — and also the built-in provider's cap of two emails per hour for the
-entire project, which is the other reason not to ship on it. Once SMTP is set:
+Configuring `[auth.email.smtp]` with a sender of your own lifts that restriction,
+and also the built-in provider's cap of two emails per hour for the entire project.
+Once SMTP is set:
 
 1. Uncomment the two `[auth.email.template.*]` blocks in
-   [`supabase/config.toml`](supabase/config.toml) — the templates themselves are
-   in [`supabase/templates/`](supabase/templates) and already use `{{ .Token }}`.
-2. Set `enable_confirmations = true` so a new account is unusable until its
-   address is verified.
+   [`supabase/config.toml`](supabase/config.toml). The templates in
+   [`supabase/templates/`](supabase/templates) already use `{{ .Token }}`.
+2. Set `enable_confirmations = true`, so a new account is unusable until its address
+   is verified.
 3. `supabase config push`.
 
-Until then the emails carry a link. The app copes: the code screen still appears,
-and clicking the link also lands a session. `verifyOtp({ type: "email" })` accepts
-both the signup-confirmation code and the sign-in code — verified against this
-project by minting each with `admin/generate_link` and redeeming it — so one code
-path serves both flows. Password and OAuth sign-in never touch email at all.
+Until then the emails carry a link, and the app copes: the code screen still
+appears, and clicking the link also lands a session. `verifyOtp({ type: "email" })`
+accepts both the signup-confirmation code and the sign-in code, so one path serves
+both flows. Password and OAuth sign-in never touch email at all.
 
-**Careful with `supabase config push`.** It writes the whole auth config, including
-`external.*.secret`. Export `SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID`,
-`SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET` and the two Google equivalents first, or the
-push will overwrite your working OAuth credentials with empty strings.
+### What the schema is made of
 
-What the migration sets up:
-
-- `profiles`, `user_state`, `telegram_links`, `telegram_codes`, `slack_links`,
-  `notification_rules`, `public_templates`, `pairings`, `challenges`,
-  `challenge_members`, `future_letters`, `onboarding`, `notification_log`.
-  `user_state` holds the user's whole Ordo document as `jsonb`, plus a `history`
-  stack (capped at 30) that powers undo.
-- **RLS on every table**, with `user_id = auth.uid()` as the rule. Nothing is
-  readable across accounts by default; the two exceptions are deliberate and
-  read-only (`public_templates` and `challenges` are browsable by any signed-in
-  user).
-- A `handle_new_user()` trigger that creates the `profiles` row on signup.
-- `SECURITY DEFINER` functions for the things a user must do without direct table
-  access: `save_state` / `undo_state`, `weekly_pct`, `peer_progress`,
+- **Tables.** `profiles`, `user_state`, `telegram_links`, `telegram_codes`,
+  `slack_links`, `notification_rules`, `public_templates`, `pairings`, `challenges`,
+  `challenge_members`, `future_letters`, `onboarding`, `notification_log`,
+  `app_categories`, `announcements`. `user_state` holds the user's whole Ordo
+  document as `jsonb`, plus a `history` stack capped at 30 that powers undo.
+- **RLS on every table**, with `user_id = auth.uid()` as the default rule. The
+  exceptions are deliberate: `public_templates` and `challenges` are browsable by
+  any signed-in user, and `app_categories` and `announcements` are readable by
+  everyone but writable only by an admin — they are app configuration, not user
+  data.
+- **`SECURITY DEFINER` functions** for everything a user must do without direct
+  table access: `save_state` / `undo_state`, `weekly_pct`, `peer_progress`,
   `pair_with_email` / `unpair`, `list_challenges` / `create_challenge` /
   `join_challenge` / `challenge_leaderboard`, `publish_template` /
   `copy_public_template`, `set_onboarding`, `create_telegram_code` /
-  `claim_telegram_code`, and `delete_account`. `peer_progress` and
-  `challenge_leaderboard` return aggregate percentages only — never task details.
-- `notification_log` doubles as the scheduler's idempotency lock: its primary key
-  is `(user_id, kind, day, ref)`, so a duplicate send attempt fails with `23505`
-  and is skipped. Overlapping cron pings are therefore harmless.
+  `claim_telegram_code`, `delete_account`, and the admin trio `admin_overview` /
+  `admin_list_users` / `admin_set_role`. `peer_progress` and
+  `challenge_leaderboard` return aggregate percentages only, never task details.
+- **`handle_new_user()`** creates the `profiles` row on signup and promotes the
+  founder address to `admin`. It promotes but never demotes, so an admin added by
+  hand keeps the role on their next login.
+- **`notification_log` doubles as the scheduler's lock.** Its primary key is
+  `(user_id, kind, day, ref)`, so a duplicate send fails with `23505` and is
+  skipped. Overlapping cron pings are therefore harmless.
 
 ## Environment variables
 
-Copy [`.env.example`](.env.example) to `.env.local` for development and set the
-same keys on Vercel. Nothing here is required to boot — without Supabase the app
-runs on localStorage, and every integration degrades to "not configured".
+Copy [`.env.example`](.env.example) to `.env.local` for development and set the same
+keys on Vercel. Nothing here is required to boot.
 
 | Variable                       | Where           | Purpose                                                                                                         |
 | ------------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -537,32 +239,33 @@ runs on localStorage, and every integration degrades to "not configured".
 | `ANTHROPIC_MODEL`              | server          | Defaults to `claude-sonnet-4-5-20250929`                                                                        |
 | `VITE_API_URL`                 | client          | Only if the frontend and API routes live on different origins. Empty = same origin                              |
 
+`VITE_*` values are inlined into the client bundle at build time, so they must be
+present _before_ the build runs. Changing one later needs a rebuild, not just a
+redeploy.
+
 ## Scheduler
 
-`/api/cron/tick` is one idempotent pass over every linked user. Each ping does the
-whole job, so it does not matter how often — or from how many sources — it is
-called. Per pass it can send: the morning brief (07:00–12:00), a pre-block
-reminder (0–15 min ahead), a nag for unfinished must-do blocks, the evening
-check-in with 0/25/50/75/100 buttons (from 21:00), the weekly report (Sunday from
-20:00), and any future-self letters that came due.
-
-If a send fails, its `notification_log` claim is deleted so the next tick retries.
+`/api/cron/tick` is one idempotent pass over every linked user, so it does not
+matter how often — or from how many sources — it is called. Per pass it can send the
+morning brief (07:00–12:00), a pre-block reminder (0–15 minutes ahead), a nag for an
+unlogged must-do, the evening check-in with its 0/25/50/75/100 buttons (from 21:00),
+the weekly report (Sunday from 20:00), and any future-self letters that came due.
+Each message reads the recipient's own clock preference. If a send fails, its
+`notification_log` claim is deleted so the next tick retries.
 
 Three ways to ping it, all supported at once:
 
 1. **GitHub Actions** — [`.github/workflows/cron.yml`](.github/workflows/cron.yml),
    every 5 minutes. This is the one that gives you minute-level reminders. Needs
-   `ORDO_APP_URL` and `CRON_SECRET` as repository secrets
-   (_Settings → Secrets and variables → Actions_). Note that GitHub only
-   registers a workflow — and only honours its `schedule:` — from the
-   **default branch**, so this stays dormant until the workflow file is on `main`.
+   `ORDO_APP_URL` and `CRON_SECRET` as repository secrets (_Settings → Secrets and
+   variables → Actions_). GitHub only honours a workflow's `schedule:` from the
+   **default branch**, so this stays dormant until the file is on `main`.
 2. **Vercel Cron** — registered at build time by
-   [`scripts/vercel-crons.mjs`](scripts/vercel-crons.mjs), which patches
-   `crons` into `.vercel/output/config.json` (`0 7 * * *`). Vercel injects the
-   `Authorization` header itself from the project's `CRON_SECRET`. Hobby plans
-   are limited to one daily cron, which is why Actions carries the fine-grained
-   schedule.
-3. **Any external cron service** — just hit the URL:
+   [`scripts/vercel-crons.mjs`](scripts/vercel-crons.mjs), which patches `crons`
+   into `.vercel/output/config.json` (`0 7 * * *`). Vercel injects the
+   `Authorization` header itself from the project's `CRON_SECRET`. Hobby plans allow
+   one daily cron, which is why Actions carries the fine-grained schedule.
+3. **Any external cron service:**
 
    ```sh
    curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<your-app>/api/cron/tick
@@ -580,48 +283,37 @@ curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
   -d 'allowed_updates=["message","callback_query"]'
 ```
 
-Those are the only two update types the handler reads, so narrowing them keeps
-the function from waking for edits and channel posts. `getWebhookInfo` is the way
-to confirm what stuck.
+Those are the only two update types the handler reads, so narrowing them keeps the
+function from waking for edits and channel posts. `getWebhookInfo` confirms what
+stuck.
 
-Optionally publish the command menu so it appears in Telegram's UI:
-
-```sh
-curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setMyCommands" \
-  -H 'content-type: application/json' \
-  -d '{"commands":[{"command":"today","description":"Today'"'"'s tasks"}]}'
-```
+To link an account: generate a code from the Telegram panel on the Today view, then
+send `/link <code>` to the bot. Commands are `/start`, `/link`, `/today`, `/status`
+and `/unlink`; the evening check-in's buttons write the completion percentage
+straight back into `user_state`.
 
 **A bot cannot open a conversation.** Until a person presses Start (or sends any
 message) at `t.me/<your-bot>`, every `sendMessage` to them fails with
-`400 chat not found` — including reminders from the cron tick. The webhook still
-answers `200`, because a poison update must never be retried forever, so this
-failure is only visible in the runtime logs as `[telegram] sendMessage failed`.
-
-To link an account: generate a code from the Telegram panel on the Today view,
-then send `/link <code>` to the bot. Commands: `/start`, `/link`, `/today`,
-`/status`, `/unlink`. The evening check-in's buttons write the completion %
-straight back into `user_state`.
+`400 chat not found`, cron reminders included. The webhook still answers `200`,
+because a poison update must never be retried forever, so the failure is visible
+only in the runtime logs as `[telegram] sendMessage failed`.
 
 ## Deploying to Vercel
 
-Set the environment variables from the table above on the project, then:
+Set the environment variables above on the project, then:
 
 ```sh
 vercel link
 vercel --prod
 ```
 
-The build command is `bun run build` and the output is `.vercel/output`
-(Build Output API v3), which Vercel detects without any `vercel.json`.
-`VITE_*` values are inlined into the client bundle at build time, so they must be
-present on the project (or in `.env.local` for a local build) _before_ the build
-runs — changing them later requires a rebuild, not just a redeploy.
+The build command is `bun run build` and the output is `.vercel/output` (Build
+Output API v3), which Vercel detects without any `vercel.json`.
 
 **If a deployment comes back `BLOCKED`:** on the Hobby plan Vercel refuses any
 deployment whose tip commit was authored by someone other than the account owner,
-and it reads that author from local git even for CLI deploys. The fix is to commit
-under the account owner's identity —
+and it reads that author from local git even for CLI deploys. Commit under the
+owner's identity —
 
 ```sh
 git config user.name  "<vercel-account-owner>"
@@ -629,15 +321,11 @@ git config user.email "<their-github-email>"
 ```
 
 — which also means a branch whose tip is a foreign commit can still be landed by
-merging it with `--no-ff`, since the merge commit becomes the new tip. Failing
-that, deploy the prebuilt output from a directory with no git metadata:
+merging with `--no-ff`, since the merge commit becomes the new tip. Failing that,
+deploy the prebuilt output from a directory with no git metadata:
 
 ```sh
 bun run build
 mkdir -p /tmp/deploy/.vercel && cp -r .vercel/output .vercel/project.json /tmp/deploy/.vercel/
 cd /tmp/deploy && vercel deploy --prebuilt --prod --archive=tgz
 ```
-
-There is nothing to deploy on Render. The old `server/` Express app, its
-`render.yaml`, and the whole long-polling bot process are gone — replaced by RLS
-policies plus the five serverless routes above.
