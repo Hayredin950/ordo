@@ -5,8 +5,6 @@ import 'routine_screen.dart';
 import 'goals_screen.dart';
 import 'insights_screen.dart';
 import 'community_screen.dart';
-import 'templates_screen.dart';
-import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onLoginRequired;
@@ -42,26 +40,6 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_tabLabels[_currentIndex]),
         actions: [
-          // Templates shortcut
-          IconButton(
-            icon: const Icon(Icons.dashboard_outlined, size: 22),
-            tooltip: 'Templates',
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(
-                builder: (_) => const TemplatesScreen(),
-              ));
-            },
-          ),
-          // Settings shortcut
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, size: 22),
-            tooltip: 'Settings',
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(
-                builder: (_) => const SettingsScreen(),
-              ));
-            },
-          ),
           AccountMenuButton(onLoginRequired: widget.onLoginRequired),
         ],
       ),
