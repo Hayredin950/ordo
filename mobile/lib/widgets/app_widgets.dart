@@ -62,14 +62,14 @@ class PanelTitle extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(
-              child: Text(title, style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF2F0E8))),
+              child: Text(title, style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF0EEE9))),
             ),
             if (action != null) const SizedBox(width: 8),
           ],
         ),
         if (hint != null) ...[
           const SizedBox(height: 4),
-          Text(hint!, style: TextStyle(fontSize: 12, color: const Color(0xFFAEA8C0))),
+          Text(hint!, style: TextStyle(fontSize: 12, color: const Color(0xFF9498A2))),
         ],
       ],
     );
@@ -145,9 +145,9 @@ class Stat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value, style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFFF2F0E8))),
+          Text(value, style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFFF0EEE9))),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 11, color: const Color(0xFFAEA8C0), height: 1.3)),
+          Text(label, style: TextStyle(fontSize: 11, color: const Color(0xFF9498A2), height: 1.3)),
         ],
       ),
     );
@@ -184,7 +184,7 @@ class SegButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: active ? Theme.of(context).colorScheme.onPrimary : const Color(0xFFAEA8C0),
+            color: active ? Theme.of(context).colorScheme.onPrimary : const Color(0xFF9498A2),
           ),
         ),
       ),
@@ -217,7 +217,7 @@ class ProgressRing extends StatelessWidget {
         children: [
           CustomPaint(
             size: Size(size, size),
-            painter: _RingPainter(progress: 1.0, strokeWidth: strokeWidth, color: const Color(0xFF4C3A54)),
+            painter: _RingPainter(progress: 1.0, strokeWidth: strokeWidth, color: const Color(0xFF2A2E36)),
           ),
           CustomPaint(
             size: Size(size, size),
@@ -228,9 +228,9 @@ class ProgressRing extends StatelessWidget {
             children: [
               Text(
                 '${value.toInt()}%',
-                style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFFF2F0E8)),
+                style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFFF0EEE9)),
               ),
-              if (label.isNotEmpty) Text(label, style: TextStyle(fontSize: 10, color: const Color(0xFFAEA8C0))),
+              if (label.isNotEmpty) Text(label, style: TextStyle(fontSize: 10, color: const Color(0xFF9498A2))),
             ],
           ),
         ],

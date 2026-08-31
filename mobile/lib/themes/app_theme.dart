@@ -1,44 +1,45 @@
 import 'package:flutter/material.dart';
 
 class OrdoColors {
-  static const Color background = Color(0xFF150D1F);
-  static const Color foreground = Color(0xFFF2F0E8);
-  static const Color surface = Color(0xFF37243E);
-  static const Color card = Color(0xFF37243E);
-  static const Color primary = Color(0xFFBF8A3C);
-  static const Color primaryForeground = Color(0xFF303420);
-  static const Color secondary = Color(0xFF473554);
-  static const Color secondaryForeground = Color(0xFFF2F0E8);
-  static const Color muted = Color(0xFF433A54);
-  static const Color mutedForeground = Color(0xFFAEA8C0);
-  static const Color accent = Color(0xFF4C3354);
-  static const Color accentForeground = Color(0xFFF6F4FA);
-  static const Color destructive = Color(0xFF993232);
-  static const Color destructiveForeground = Color(0xFFF7F2F2);
-  static const Color border = Color(0xFF4C3A54);
-  static const Color input = Color(0xFF4C3A54);
-  static const Color ring = Color(0xFFBF8A3C);
+  // Colors converted from the website's oklch palette
+  static const Color background = Color(0xFF0D0F15);
+  static const Color foreground = Color(0xFFF0EEE9);
+  static const Color surface = Color(0xFF161920);
+  static const Color card = Color(0xFF161920);
+  static const Color primary = Color(0xFFF49329);
+  static const Color primaryForeground = Color(0xFF1B120B);
+  static const Color secondary = Color(0xFF252931);
+  static const Color secondaryForeground = Color(0xFFF0EEE9);
+  static const Color muted = Color(0xFF21242B);
+  static const Color mutedForeground = Color(0xFF9498A2);
+  static const Color accent = Color(0xFF292E38);
+  static const Color accentForeground = Color(0xFFF4F2EC);
+  static const Color destructive = Color(0xFFDE3B3D);
+  static const Color destructiveForeground = Color(0xFFF8F5EE);
+  static const Color border = Color(0xFF2A2E36);
+  static const Color input = Color(0xFF2A2E36);
+  static const Color ring = Color(0xFFF49329);
 
-  static const Color catHealth = Color(0xFFBF8A3C);
-  static const Color catStudy = Color(0xFF7A8EC0);
-  static const Color catWork = Color(0xFFBF8A3C);
-  static const Color catFinance = Color(0xFFC8A03C);
-  static const Color catSpiritual = Color(0xFF9966A8);
-  static const Color catRelationships = Color(0xFF548A3C);
+  static const Color catHealth = Color(0xFF55C975);
+  static const Color catStudy = Color(0xFF52A9FE);
+  static const Color catWork = Color(0xFFF49329);
+  static const Color catFinance = Color(0xFFCEB92D);
+  static const Color catSpiritual = Color(0xFFBF8AE6);
+  static const Color catRelationships = Color(0xFFF87584);
 
-  static const Color chart1 = Color(0xFFBF8A3C);
-  static const Color chart2 = Color(0xFF7A8EC0);
-  static const Color chart3 = Color(0xFF3CA86A);
-  static const Color chart4 = Color(0xFF9966A8);
-  static const Color chart5 = Color(0xFF548A3C);
-  static const Color sidebar = Color(0xFF312A44);
-  static const Color sidebarForeground = Color(0xFFF2F0E8);
-  static const Color sidebarPrimary = Color(0xFFBF8A3C);
-  static const Color sidebarPrimaryForeground = Color(0xFF303420);
-  static const Color sidebarAccent = Color(0xFF473554);
-  static const Color sidebarAccentForeground = Color(0xFFF2F0E8);
-  static const Color sidebarBorder = Color(0xFF4C3A54);
-  static const Color sidebarRing = Color(0xFFBF8A3C);
+  static const Color chart1 = Color(0xFFF49329);
+  static const Color chart2 = Color(0xFF52A9FE);
+  static const Color chart3 = Color(0xFF55C975);
+  static const Color chart4 = Color(0xFFBF8AE6);
+  static const Color chart5 = Color(0xFFF87584);
+  static const Color sidebar = Color(0xFF11141A);
+  static const Color sidebarForeground = Color(0xFFF0EEE9);
+  static const Color sidebarPrimary = Color(0xFFF49329);
+  static const Color sidebarPrimaryForeground = Color(0xFF1B120B);
+  static const Color sidebarAccent = Color(0xFF252931);
+  static const Color sidebarAccentForeground = Color(0xFFF0EEE9);
+  static const Color sidebarBorder = Color(0xFF2A2E36);
+  static const Color sidebarRing = Color(0xFFF49329);
 }
 
 class OrdoTheme {
