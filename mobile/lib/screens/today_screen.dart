@@ -6,12 +6,25 @@ import '../services/state_provider.dart';
 import '../services/auth_provider.dart';
 import '../utils/ordo.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/focus_timer.dart';
 import '../themes/app_theme.dart';
 
-class TodayScreen extends StatelessWidget {
+const _steps = [0, 25, 50, 75, 100];
+
+class TodayScreen extends StatefulWidget {
   final VoidCallback? onLoginRequired;
 
   const TodayScreen({super.key, this.onLoginRequired});
+
+  @override
+  State<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends State<TodayScreen> {
+  int _offset = 0;
+
+  DateTime get _day => addDays(DateTime.now(), _offset);
+
 
   @override
   Widget build(BuildContext context) {
@@ -19,46 +32,49 @@ class TodayScreen extends StatelessWidget {
       builder: (context, prov, _) {
         final state = prov.state;
         if (state == null) return const Center(child: CircularProgressIndicator());
-        final today = DateTime.now();
-        final blocks = blocksFor(state, today);
-        final score = dayScore(state, today);
-        final entries = state.log[dateKey(today)] ?? {};
+        final key = dateKey(_day);
+        final blocks = blocksFor(state, _day);
+        final entries = state.log[key] ?? {};
+        final score = dayScore(state, _day);
+        final s = streak(state);
+        final debt = missedDebt(state);
+        final completed = entries.values.where((v) => v >= 100).length;
+
         return RefreshIndicator(
-          onRefresh: () async {
-            await Future.delayed(const Duration(milliseconds: 300));
-          },
+          onRefresh: () async => Future.delayed(const Duration(milliseconds: 300)),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── Day header with navigation ──
+                _DayHeader(
+                  day: _day,
+                  blockCount: blocks.length,
+                  hasOverride: state.overrides.containsKey(key),
+                  onPrev: () => setState(() => _offset--),
+                  onToday: () => setState(() => _offset = 0),
+                  onNext: () => setState(() => _offset++),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Streak + score ring ──
+                _StreakAndScore(score: score, streak: s),
+                const SizedBox(height: 16),
+
+                // ── Stats: blocks cleared + missed-task debt ──
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      DateFormat('EEEE, MMMM d').format(today),
-                      style: const TextStyle(
-                          fontFamily: 'SpaceGrotesk',
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700),
-                    ),
-                    Row(
-                      children: [
-                        const Icon(Icons.star, color: OrdoColors.primary, size: 20),
-                        const SizedBox(width: 4),
-                        Text('$score', style: const TextStyle(
-                            fontFamily: 'SpaceGrotesk',
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700)),
-                      ],
-                    ),
+                    Expanded(child: Stat(value: '$completed/${blocks.length}', label: 'Blocks cleared')),
+                    const SizedBox(width: 8),
+                    Expanded(child: Stat(value: '${debt.length}', label: 'Missed-task debt')),
                   ],
                 ),
                 const SizedBox(height: 16),
-                _StreakCard(),
-                const SizedBox(height: 16),
-                PanelTitle(title: 'Blocks', hint: '${blocks.length} tasks today'),
+
+                // ── Blocks with inline 5-step scoring ──
+                PanelTitle(title: 'Blocks', hint: '${blocks.length} time blocks planned'),
                 const SizedBox(height: 8),
                 if (blocks.isEmpty)
                   Panel(
@@ -66,7 +82,7 @@ class TodayScreen extends StatelessWidget {
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                          'No blocks for today.\nAdd blocks in the Routine tab.',
+                          'Nothing scheduled.\nBuild a routine in the Routine tab.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: OrdoColors.mutedForeground),
                         ),
@@ -76,13 +92,26 @@ class TodayScreen extends StatelessWidget {
                 else
                   ...blocks.map((b) => _BlockTile(
                     block: b,
-                    score: entries[b.id] ?? 0,
-                    onLoginRequired: onLoginRequired,
+                    pct: entries[b.id] ?? 0,
+                    onLoginRequired: widget.onLoginRequired,
                   )),
                 const SizedBox(height: 16),
-                _JournalSection(onLoginRequired: onLoginRequired),
+
+                // ── Debt & catch-up ──
+                _DebtAndCatchUp(debt: debt),
                 const SizedBox(height: 16),
-                const _AnnouncementBanner(),
+
+                // ── Journal / Reflection ──
+                _JournalSection(onLoginRequired: widget.onLoginRequired),
+                const SizedBox(height: 16),
+
+                // ── Notification channels ──
+                _NotificationChannels(onLoginRequired: widget.onLoginRequired),
+                const SizedBox(height: 16),
+
+                // ── Focus timer ──
+                const FocusTimer(),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -92,301 +121,332 @@ class TodayScreen extends StatelessWidget {
   }
 }
 
-class _StreakCard extends StatelessWidget {
-  const _StreakCard();
+// ─── Day Header ────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<OrdoProvider>(
-      builder: (context, prov, _) {
-        final state = prov.state;
-        if (state == null) return const SizedBox.shrink();
-        final s = streak(state);
-        return Panel(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Stat(value: '${s.current}', label: 'Current Streak'),
-              Stat(value: '${s.best}', label: 'Best Streak'),
-              Stat(value: '${_completedToday(prov.state)}', label: 'Completed'),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
+class _DayHeader extends StatelessWidget {
+  final DateTime day;
+  final int blockCount;
+  final bool hasOverride;
+  final VoidCallback onPrev;
+  final VoidCallback onToday;
+  final VoidCallback onNext;
 
-int _completedToday(OrdoState? state) {
-  if (state == null) return 0;
-  final today = DateTime.now();
-  final entries = state.log[dateKey(today)] ?? {};
-  return entries.values.where((v) => v >= 100).length;
-}
-
-class _BlockTile extends StatelessWidget {
-  final Block block;
-  final int score;
-  final VoidCallback? onLoginRequired;
-
-  const _BlockTile({required this.block, required this.score, this.onLoginRequired});
-
-  @override
-  Widget build(BuildContext context) {
-    return Panel(
-      margin: const EdgeInsets.only(bottom: 8),
-      onTap: () => _showScoreSheet(context),
-      child: Row(
-        children: [
-          CategoryDot(id: block.category),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(block.title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, color: OrdoColors.foreground)),
-                Text(formatTimeRange(block.start, block.end),
-                    style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
-              ],
-            ),
-          ),
-          _ScoreChip(score: score),
-        ],
-      ),
-    );
-  }
-
-  void _showScoreSheet(BuildContext context) {
-    if (!context.read<AuthProvider>().isLoggedIn) {
-      onLoginRequired?.call();
-      return;
-    }
-    int tempScore = score;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: OrdoColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(block.title,
-                            style: const TextStyle(
-                                fontFamily: 'SpaceGrotesk',
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: OrdoColors.foreground)),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: OrdoColors.mutedForeground),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(formatTimeRange(block.start, block.end),
-                      style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground)),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _ScoreButton(
-                        icon: Icons.cancel_outlined,
-                        label: 'Missed',
-                        color: OrdoColors.mutedForeground,
-                        active: tempScore == 0,
-                        onTap: () => setSheetState(() => tempScore = 0),
-                      ),
-                      const SizedBox(width: 12),
-                      _ScoreButton(
-                        icon: Icons.hourglass_top,
-                        label: 'Partial',
-                        color: OrdoColors.primary,
-                        active: tempScore > 0 && tempScore < 100,
-                        onTap: () => setSheetState(() => tempScore = 50),
-                      ),
-                      const SizedBox(width: 12),
-                      _ScoreButton(
-                        icon: Icons.check_circle_outline,
-                        label: 'Done',
-                        color: Colors.green,
-                        active: tempScore >= 100,
-                        onTap: () => setSheetState(() => tempScore = 100),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Text('0', style: TextStyle(color: OrdoColors.mutedForeground, fontSize: 12)),
-                      Expanded(
-                        child: Slider(
-                          value: tempScore.toDouble(),
-                          min: 0,
-                          max: 100,
-                          divisions: 20,
-                          activeColor: OrdoColors.primary,
-                          inactiveColor: OrdoColors.border,
-                          onChanged: (v) => setSheetState(() => tempScore = v.round()),
-                        ),
-                      ),
-                      Text('100', style: TextStyle(color: OrdoColors.mutedForeground, fontSize: 12)),
-                    ],
-                  ),
-                  Text(
-                    '$tempScore%',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontFamily: 'SpaceGrotesk',
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        color: OrdoColors.foreground),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        context.read<OrdoProvider>().update((s) {
-                          final todayKey = dateKey(DateTime.now());
-                          final log = Map<String, Map<String, int>>.from(s.log);
-                          final dayLog = Map<String, int>.from(log[todayKey] ?? {});
-                          dayLog[block.id] = tempScore;
-                          log[todayKey] = dayLog;
-                          return s.copyWith(log: log);
-                        });
-                        Navigator.pop(ctx);
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _ScoreButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _ScoreButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.active,
-    required this.onTap,
+  const _DayHeader({
+    required this.day,
+    required this.blockCount,
+    required this.hasOverride,
+    required this.onPrev,
+    required this.onToday,
+    required this.onNext,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          DateFormat('EEEE, MMM d').format(day),
+          style: const TextStyle(
+            fontFamily: 'SpaceGrotesk',
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: OrdoColors.foreground,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$blockCount blocks${hasOverride ? ' · custom day' : ''}',
+          style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _NavButton(icon: Icons.chevron_left, onTap: onPrev, label: 'Previous day'),
+            const SizedBox(width: 8),
+            _NavButton(icon: Icons.chevron_right, onTap: onNext, label: 'Next day'),
+            const Spacer(),
+            _TextButton(label: 'Today', onTap: onToday),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final String label;
+
+  const _NavButton({required this.icon, required this.onTap, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: active ? color.withValues(alpha: 0.2) : OrdoColors.card,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: active ? color : OrdoColors.border,
-            width: active ? 2 : 1,
-          ),
+          color: OrdoColors.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: OrdoColors.border),
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: active ? color : OrdoColors.mutedForeground, size: 24),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: active ? color : OrdoColors.mutedForeground,
-            )),
-          ],
-        ),
+        child: Icon(icon, size: 20, color: OrdoColors.mutedForeground),
       ),
     );
   }
 }
 
-class _ScoreChip extends StatelessWidget {
-  final int score;
+class _TextButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
 
-  const _ScoreChip({required this.score});
+  const _TextButton({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    if (score >= 100) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(999),
+          color: OrdoColors.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: OrdoColors.border),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 16),
-            const SizedBox(width: 4),
-            Text('Done', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.green)),
-          ],
-        ),
-      );
-    }
-    if (score > 0) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: OrdoColors.primary.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.hourglass_top, color: OrdoColors.primary, size: 16),
-            const SizedBox(width: 4),
-            Text('$score%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: OrdoColors.primary)),
-          ],
-        ),
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: OrdoColors.mutedForeground.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
+        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: OrdoColors.mutedForeground)),
       ),
+    );
+  }
+}
+
+// ─── Streak + Score Ring ───────────────────────────────────────────────
+
+class _StreakAndScore extends StatelessWidget {
+  final int score;
+  final Streak streak;
+
+  const _StreakAndScore({required this.score, required this.streak});
+
+  @override
+  Widget build(BuildContext context) {
+    return Panel(
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.cancel_outlined, color: OrdoColors.mutedForeground, size: 16),
-          const SizedBox(width: 4),
-          Text('Missed', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: OrdoColors.mutedForeground)),
+          ProgressRing(
+            value: score.toDouble().clamp(0, 100),
+            label: 'today',
+            size: 80,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.local_fire_department, color: OrdoColors.primary, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${streak.current}-day streak',
+                      style: const TextStyle(
+                        fontFamily: 'SpaceGrotesk',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: OrdoColors.foreground,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text('Best ever: ${streak.best} days',
+                    style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground)),
+                const SizedBox(height: 2),
+                Text('Counted when a day closes above 70%.',
+                    style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground)),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
+
+// ─── Block Tile with Inline 5-Step Scoring ─────────────────────────────
+
+class _BlockTile extends StatelessWidget {
+  final Block block;
+  final int pct;
+  final VoidCallback? onLoginRequired;
+
+  const _BlockTile({
+    required this.block,
+    required this.pct,
+    this.onLoginRequired,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final done = pct >= 100;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: done ? OrdoColors.primary.withValues(alpha: 0.05) : OrdoColors.card,
+        border: Border.all(
+          color: done ? OrdoColors.primary.withValues(alpha: 0.3) : OrdoColors.border,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Time range
+          Text(formatTimeRange(block.start, block.end),
+              style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground)),
+          const SizedBox(height: 6),
+          // Title + must badge
+          Row(
+            children: [
+              Text(
+                block.title,
+                style: TextStyle(
+                  decoration: done ? TextDecoration.lineThrough : null,
+                  decorationColor: OrdoColors.mutedForeground,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  color: OrdoColors.foreground,
+                ),
+              ),
+              if (block.priority == 'must') ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: OrdoColors.muted,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('MUST',
+                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 1)),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Category pill
+          CategoryPill(id: block.category),
+          const SizedBox(height: 10),
+          // 5-step scoring buttons
+          Row(
+            children: _steps.map((v) {
+              final active = pct == v;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (!context.read<AuthProvider>().isLoggedIn) {
+                      onLoginRequired?.call();
+                      return;
+                    }
+                    context.read<OrdoProvider>().update((s) {
+                      final todayKey = dateKey(DateTime.now());
+                      final log = Map<String, Map<String, int>>.from(s.log);
+                      final dayLog = Map<String, int>.from(log[todayKey] ?? {});
+                      dayLog[block.id] = v;
+                      log[todayKey] = dayLog;
+                      return s.copyWith(log: log);
+                    });
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: active ? OrdoColors.primary : OrdoColors.muted,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$v',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: active ? OrdoColors.primaryForeground : OrdoColors.mutedForeground,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Debt & Catch-up ───────────────────────────────────────────────────
+
+class _DebtAndCatchUp extends StatelessWidget {
+  final List<Map<String, dynamic>> debt;
+
+  const _DebtAndCatchUp({required this.debt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PanelTitle(title: 'Debt & catch-up', hint: 'Skipped must-do blocks from the last 14 days.'),
+          const SizedBox(height: 8),
+          if (debt.isEmpty)
+            Text('Clean slate. Nothing owed.',
+                style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground))
+          else
+            ...debt.map((d) {
+              final block = d['block'] as Block;
+              final date = d['date'] as String;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 16, color: OrdoColors.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(block.title, style: const TextStyle(fontSize: 13, color: OrdoColors.foreground), overflow: TextOverflow.ellipsis),
+                    ),
+                    Text(date.substring(5), style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
+                  ],
+                ),
+              );
+            }),
+          if (debt.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Fit ${debt.length} missed block(s) into the next 4 evenings.')),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: OrdoColors.mutedForeground,
+                  side: BorderSide(color: OrdoColors.border),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Propose a catch-up plan'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Journal Section ───────────────────────────────────────────────────
 
 class _JournalSection extends StatelessWidget {
   final VoidCallback? onLoginRequired;
@@ -408,15 +468,13 @@ class _JournalSection extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Journal',
-                      style: TextStyle(
-                          fontFamily: 'SpaceGrotesk',
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: OrdoColors.foreground)),
+                  const Text('Reflection',
+                      style: TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 16, fontWeight: FontWeight.w600, color: OrdoColors.foreground)),
                   Icon(Icons.edit, color: OrdoColors.mutedForeground, size: 18),
                 ],
               ),
+              Text('One honest line about today — fuels better suggestions.',
+                  style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
               const SizedBox(height: 8),
               GestureDetector(
                 onTap: () {
@@ -428,17 +486,10 @@ class _JournalSection extends StatelessWidget {
                 },
                 child: existing.isEmpty
                     ? Text(
-                        'Tap to write a journal entry for today...',
-                        style: TextStyle(
-                            color: OrdoColors.mutedForeground,
-                            fontStyle: FontStyle.italic),
+                        'What worked, what slipped, and why…',
+                        style: TextStyle(color: OrdoColors.mutedForeground, fontStyle: FontStyle.italic),
                       )
-                    : Text(
-                        existing,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: OrdoColors.foreground, fontSize: 14),
-                      ),
+                    : Text(existing, maxLines: 4, overflow: TextOverflow.ellipsis, style: TextStyle(color: OrdoColors.foreground, fontSize: 14)),
               ),
             ],
           ),
@@ -453,9 +504,7 @@ class _JournalSection extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: OrdoColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         return Padding(
           padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
@@ -463,21 +512,16 @@ class _JournalSection extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Journal',
-                  style: TextStyle(
-                      fontFamily: 'SpaceGrotesk',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700)),
+              const Text('Reflection', style: TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 20, fontWeight: FontWeight.w700)),
               const SizedBox(height: 4),
-              Text(DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                  style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground)),
+              Text(DateFormat('EEEE, MMMM d').format(DateTime.now()), style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground)),
               const SizedBox(height: 16),
               TextField(
                 controller: ctrl,
                 maxLines: 8,
                 autofocus: true,
                 decoration: InputDecoration(
-                  hintText: 'How did today go? What did you learn?',
+                  hintText: 'What worked, what slipped, and why…',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
@@ -508,25 +552,55 @@ class _JournalSection extends StatelessWidget {
   }
 }
 
-class _AnnouncementBanner extends StatelessWidget {
-  const _AnnouncementBanner();
+// ─── Notification Channels ─────────────────────────────────────────────
+
+class _NotificationChannels extends StatelessWidget {
+  final VoidCallback? onLoginRequired;
+
+  const _NotificationChannels({this.onLoginRequired});
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
     return Panel(
-      color: OrdoColors.accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Welcome to Ordo!',
-              style: TextStyle(
-                  fontFamily: 'SpaceGrotesk',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: OrdoColors.foreground)),
-          const SizedBox(height: 4),
-          Text('Track your habits, hit your goals, and build discipline one day at a time.',
-              style: TextStyle(color: OrdoColors.secondaryForeground)),
+          PanelTitle(
+            title: 'Notification channels',
+            hint: 'Telegram-first, Slack as a second option — one shared service.',
+          ),
+          const SizedBox(height: 8),
+          if (!auth.isLoggedIn)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Sign in to connect Telegram or Slack.',
+                style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground),
+              ),
+            )
+          else ...[
+            // Telegram section
+            Text('TELEGRAM',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1, color: OrdoColors.mutedForeground)),
+            const SizedBox(height: 8),
+            Text(
+              'Bot not configured on the server yet. Set TELEGRAM_BOT_TOKEN to activate reminders, nags and check-ins.',
+              style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground),
+            ),
+            const SizedBox(height: 16),
+            Container(height: 1, color: OrdoColors.border),
+            const SizedBox(height: 16),
+
+            // Slack section
+            Text('SLACK',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1, color: OrdoColors.mutedForeground)),
+            const SizedBox(height: 8),
+            Text(
+              'Slack not configured on the server. Set SLACK_BOT_TOKEN to receive reminders here too.',
+              style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground),
+            ),
+          ],
         ],
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
+import 'package:supabase_flutter/supabase_flutter.dart' show LaunchMode;
 
 class AuthProvider extends ChangeNotifier {
   final _client = supa.Supabase.instance.client;
@@ -75,6 +76,7 @@ class AuthProvider extends ChangeNotifier {
     await _client.auth.signInWithOAuth(
       providerEnum,
       redirectTo: 'io.supabase.ordo://login-callback/',
+      authScreenLaunchMode: LaunchMode.inAppWebView,
     );
     _loading = false;
     notifyListeners();

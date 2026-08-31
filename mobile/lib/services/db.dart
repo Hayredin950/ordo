@@ -47,12 +47,14 @@ class OrdoDb {
     await _client.rpc('join_challenge', params: {'p_challenge': challengeId});
   }
 
-  static Future<List<Map<String, dynamic>>> challengeLeaderboard(String challengeId) async {
+  static Future<Map<String, dynamic>> challengeLeaderboard(String challengeId) async {
     try {
       final res = await _client.rpc('challenge_leaderboard', params: {'p_challenge': challengeId});
-      return List<Map<String, dynamic>>.from(res);
+      if (res is Map) return Map<String, dynamic>.from(res);
+      // If it returns a list, wrap it
+      return {'leaderboard': List<Map<String, dynamic>>.from(res as List), 'myRank': null};
     } catch (_) {
-      return [];
+      return {'leaderboard': [], 'myRank': null};
     }
   }
 
@@ -136,6 +138,12 @@ class OrdoDb {
     } catch (_) {
       return [];
     }
+  }
+
+  // --- Account ---
+  static Future<void> deleteAccount() async {
+    if (_user == null) throw Exception('Not logged in');
+    await _client.rpc('delete_account');
   }
 
   // --- Undo ---
