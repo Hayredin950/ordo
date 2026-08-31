@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import '../models/ordo_state.dart';
 import '../services/state_provider.dart';
 import '../services/auth_provider.dart';
-import '../widgets/app_widgets.dart';
 import '../themes/app_theme.dart';
+import '../widgets/app_widgets.dart';
 
 class GoalsScreen extends StatefulWidget {
   final VoidCallback? onLoginRequired;
@@ -22,11 +22,24 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _periodTabs(),
-        Expanded(child: _goalsList()),
-      ],
+    return Scaffold(
+      body: Column(
+        children: [
+          _periodTabs(),
+          Expanded(child: _goalsList()),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          if (!context.read<AuthProvider>().isLoggedIn) {
+            widget.onLoginRequired?.call();
+            return;
+          }
+          _addGoal(context);
+        },
+        backgroundColor: OrdoColors.primary,
+        child: Icon(Icons.add, color: OrdoColors.primaryForeground),
+      ),
     );
   }
 

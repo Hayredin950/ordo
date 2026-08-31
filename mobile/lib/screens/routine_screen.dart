@@ -24,11 +24,24 @@ class _RoutineScreenState extends State<RoutineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _dayTabs(),
-        Expanded(child: _blocksList()),
-      ],
+    return Scaffold(
+      body: Column(
+        children: [
+          _dayTabs(),
+          Expanded(child: _blocksList()),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          if (!context.read<AuthProvider>().isLoggedIn) {
+            widget.onLoginRequired?.call();
+            return;
+          }
+          _addBlock(context);
+        },
+        backgroundColor: OrdoColors.primary,
+        child: Icon(Icons.add, color: OrdoColors.primaryForeground),
+      ),
     );
   }
 

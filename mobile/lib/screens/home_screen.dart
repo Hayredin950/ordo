@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../services/auth_provider.dart';
-import '../themes/app_theme.dart';
 import '../widgets/account_menu.dart';
 import 'today_screen.dart';
 import 'routine_screen.dart';
@@ -65,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ));
             },
           ),
-          const AccountMenuButton(),
+          AccountMenuButton(onLoginRequired: widget.onLoginRequired),
         ],
       ),
       body: IndexedStack(

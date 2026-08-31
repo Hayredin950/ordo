@@ -8,12 +8,14 @@ import '../themes/app_theme.dart';
 /// Three-dot overflow menu matching the web's AccountMenu in AppShell.
 /// Shows user info, clock toggle, reset, and sign out.
 class AccountMenuButton extends StatelessWidget {
-  const AccountMenuButton({super.key});
+  final VoidCallback? onLoginRequired;
+
+  const AccountMenuButton({super.key, this.onLoginRequired});
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    if (!auth.isLoggedIn) return const SizedBox.shrink();
+    final isLoggedIn = auth.isLoggedIn;
 
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: OrdoColors.foreground),
@@ -26,33 +28,57 @@ class AccountMenuButton extends StatelessWidget {
         final email = auth.user?.email ?? '';
 
         return [
-          // User info header
+          // User info header (or not signed in notice)
           PopupMenuItem<String>(
             enabled: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  email,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: OrdoColors.foreground,
-                    fontSize: 13,
+                if (isLoggedIn) ...[
+                  Text(
+                    email,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: OrdoColors.foreground,
+                      fontSize: 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Signed in',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: OrdoColors.mutedForeground,
+                  const SizedBox(height: 2),
+                  Text(
+                    'Signed in',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: OrdoColors.mutedForeground,
+                    ),
                   ),
-                ),
+                ] else
+                  Text(
+                    'Not signed in — data stays on this device',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: OrdoColors.mutedForeground,
+                    ),
+                  ),
               ],
             ),
           ),
           const PopupMenuDivider(),
+
+          if (!isLoggedIn)
+            PopupMenuItem<String>(
+              value: 'signin',
+              child: Row(
+                children: [
+                  const Icon(Icons.login, size: 20, color: OrdoColors.primary),
+                  const SizedBox(width: 12),
+                  const Text('Sign in',
+                      style: TextStyle(color: OrdoColors.primary)),
+                ],
+              ),
+            ),
+          if (!isLoggedIn)
+            const PopupMenuDivider(),
 
           // Clock format toggle
           PopupMenuItem<String>(
@@ -86,18 +112,19 @@ class AccountMenuButton extends StatelessWidget {
           ),
           const PopupMenuDivider(),
 
-          // Sign out
-          PopupMenuItem<String>(
-            value: 'signout',
-            child: Row(
-              children: [
-                const Icon(Icons.logout, size: 20, color: OrdoColors.mutedForeground),
-                const SizedBox(width: 12),
-                const Text('Sign out',
-                    style: TextStyle(color: OrdoColors.foreground)),
-              ],
+          // Sign out (only when logged in)
+          if (isLoggedIn)
+            PopupMenuItem<String>(
+              value: 'signout',
+              child: Row(
+                children: [
+                  const Icon(Icons.logout, size: 20, color: OrdoColors.mutedForeground),
+                  const SizedBox(width: 12),
+                  const Text('Sign out',
+                      style: TextStyle(color: OrdoColors.foreground)),
+                ],
+              ),
             ),
-          ),
         ];
       },
     );
@@ -108,6 +135,10 @@ class AccountMenuButton extends StatelessWidget {
     final ordo = context.read<OrdoProvider>();
 
     switch (value) {
+      case 'signin':
+        onLoginRequired?.call();
+        break;
+
       case 'clock':
         final state = ordo.state;
         if (state == null) return;

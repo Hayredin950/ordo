@@ -179,13 +179,17 @@ class _PeerSection extends StatelessWidget {
               if (ctrl.text.trim().isNotEmpty) {
                 try {
                   await OrdoDb.pairWithEmail(ctrl.text.trim());
+                  if (!ctx.mounted) return;
                   Navigator.pop(ctx);
                   onRefresh();
                 } catch (e) {
+                  if (!ctx.mounted) return;
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}')),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}')),
+                    );
+                  }
                 }
               }
             },
@@ -283,9 +287,11 @@ class _ChallengeSection extends StatelessWidget {
                               await OrdoDb.joinChallenge(c['id']);
                               onRefresh();
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error joining challenge')),
-                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Error joining challenge')),
+                                );
+                              }
                             }
                           },
                           style: ElevatedButton.styleFrom(
@@ -338,13 +344,17 @@ class _ChallengeSection extends StatelessWidget {
                 try {
                   final now = DateFormat('yyyy-MM-dd').format(DateTime.now());
                   await OrdoDb.createChallenge(nameCtrl.text.trim(), now, endsCtrl.text);
+                  if (!ctx.mounted) return;
                   Navigator.pop(ctx);
                   onRefresh();
                 } catch (e) {
+                  if (!ctx.mounted) return;
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error creating challenge')),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Error creating challenge')),
+                    );
+                  }
                 }
               }
             },
@@ -495,9 +505,11 @@ class _FutureLettersSectionState extends State<_FutureLettersSection> {
                 try {
                   await OrdoDb.createLetter(
                       goalCtrl.text, bodyCtrl.text, deadlineCtrl.text);
+                  if (!ctx.mounted) return;
                   Navigator.pop(ctx);
                   _load();
                 } catch (e) {
+                  if (!ctx.mounted) return;
                   Navigator.pop(ctx);
                 }
               }
