@@ -1,0 +1,2 @@
+const supabaseUrl = 'https://sahezgrnpkvxamaetjcu.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhaGV6Z3JucGt2eGFtYWV0amN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4MzU0ODMsImV4cCI6MjEwMzQxMTQ4M30.88QWbyBCSVqOzn4fZXRkf2ONplOWBbyV0nFMTxAv0a4';
