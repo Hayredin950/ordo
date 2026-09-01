@@ -1,4 +1,4 @@
-package com.example.mobile
+package io.supabase.ordo
 
 import io.flutter.embedding.android.FlutterActivity
 

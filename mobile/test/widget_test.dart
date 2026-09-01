@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile/themes/app_theme.dart';
-import 'package:mobile/widgets/app_widgets.dart';
+import 'package:ordo/themes/app_theme.dart';
+import 'package:ordo/widgets/app_widgets.dart';
 
 void main() {
   testWidgets('App theme renders correctly', (WidgetTester tester) async {
