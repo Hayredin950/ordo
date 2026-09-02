@@ -5,6 +5,7 @@ import 'config.dart';
 import 'services/state_provider.dart';
 import 'services/auth_provider.dart';
 import 'services/categories_provider.dart';
+import 'services/channels_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'themes/app_theme.dart';
@@ -25,6 +26,7 @@ class OrdoApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => OrdoProvider()..init()),
         ChangeNotifierProvider(create: (_) => CategoriesProvider()),
+        ChangeNotifierProvider(create: (_) => ChannelsProvider()),
       ],
       child: MaterialApp(
         title: 'Ordo',
@@ -49,12 +51,18 @@ class _OrdoRootState extends State<OrdoRoot> {
     super.initState();
     final auth = context.read<AuthProvider>();
     final ordo = context.read<OrdoProvider>();
+    final channels = context.read<ChannelsProvider>();
     auth.addListener(() {
       if (!mounted) return;
       if (auth.isLoggedIn) {
         ordo.reload();
+        channels.refresh();
+      } else {
+        channels.clear();
       }
     });
+    // A restored session may already be in place before the first auth event.
+    if (auth.isLoggedIn) channels.refresh();
   }
 
   void showLogin() {

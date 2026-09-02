@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/ordo_state.dart';
 import '../services/state_provider.dart';
 import '../services/auth_provider.dart';
+import '../services/channels_provider.dart';
 import '../utils/ordo.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/focus_timer.dart';
@@ -554,55 +556,256 @@ class _JournalSection extends StatelessWidget {
 
 // ─── Notification Channels ─────────────────────────────────────────────
 
-class _NotificationChannels extends StatelessWidget {
+/// Telegram-first, Slack second — the same flow as the web panel: mint a code,
+/// send `/link CODE` to the bot, and [ChannelsProvider] polls until the chat is
+/// bound. Whether either channel is offered at all comes from `/api/health`.
+class _NotificationChannels extends StatefulWidget {
   final VoidCallback? onLoginRequired;
 
   const _NotificationChannels({this.onLoginRequired});
 
   @override
+  State<_NotificationChannels> createState() => _NotificationChannelsState();
+}
+
+class _NotificationChannelsState extends State<_NotificationChannels> {
+  final _slackCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _slackCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final channels = context.watch<ChannelsProvider>();
+    final hour12 = (context.watch<OrdoProvider>().state?.settings?.hourFormat ?? '24h') == '12h';
+
     return Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           PanelTitle(
             title: 'Notification channels',
-            hint: 'Telegram-first, Slack as a second option — one shared service.',
+            hint: auth.isLoggedIn
+                ? 'Telegram-first, Slack as a second option — one shared service.'
+                : 'Sign in to link the nagging channel.',
           ),
           const SizedBox(height: 8),
-          if (!auth.isLoggedIn)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Sign in to connect Telegram or Slack.',
-                style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground),
-              ),
-            )
-          else ...[
-            // Telegram section
-            Text('TELEGRAM',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1, color: OrdoColors.mutedForeground)),
+          if (!auth.isLoggedIn) ...[
+            _muted('Sign in to connect Telegram or Slack.'),
             const SizedBox(height: 8),
-            Text(
-              'Bot not configured on the server yet. Set TELEGRAM_BOT_TOKEN to activate reminders, nags and check-ins.',
-              style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: widget.onLoginRequired,
+                child: const Text('Sign in'),
+              ),
             ),
+          ] else ...[
+            _label('TELEGRAM'),
+            const SizedBox(height: 8),
+            ..._telegramSection(channels, hour12),
             const SizedBox(height: 16),
             Container(height: 1, color: OrdoColors.border),
             const SizedBox(height: 16),
-
-            // Slack section
-            Text('SLACK',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1, color: OrdoColors.mutedForeground)),
+            _label('SLACK'),
             const SizedBox(height: 8),
-            Text(
-              'Slack not configured on the server. Set SLACK_BOT_TOKEN to receive reminders here too.',
-              style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground),
-            ),
+            ..._slackSection(channels),
           ],
         ],
       ),
     );
   }
+
+  Widget _muted(String text) => Text(text, style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground));
+
+  Widget _label(String text) => Text(
+    text,
+    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1, color: OrdoColors.mutedForeground),
+  );
+
+  Widget _linkedTo(String value, {String? suffix}) => Row(
+    children: [
+      const Icon(Icons.check, size: 16, color: OrdoColors.primary),
+      const SizedBox(width: 6),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(color: OrdoColors.muted, borderRadius: BorderRadius.circular(4)),
+        child: Text(value, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: OrdoColors.foreground)),
+      ),
+      if (suffix != null) ...[
+        const SizedBox(width: 6),
+        Flexible(child: _muted(suffix)),
+      ],
+    ],
+  );
+
+  List<Widget> _telegramSection(ChannelsProvider channels, bool hour12) {
+    if (!channels.telegramConfigured) {
+      return [
+        _muted('Bot not configured on the server yet. Set TELEGRAM_BOT_TOKEN to activate reminders, nags and check-ins.'),
+      ];
+    }
+
+    final link = channels.telegram;
+    if (link != null) {
+      return [
+        _linkedTo(link.chatId, suffix: link.username.isEmpty ? null : '(@${link.username})'),
+        const SizedBox(height: 8),
+        _muted("You'll get 10-minute reminders, nags and the "
+            '${formatTime('21:00', hour12: hour12)} check-in here.'),
+        const SizedBox(height: 12),
+        OutlinedButton(
+          onPressed: channels.busy ? null : _unlinkTelegram,
+          child: const Text('Unlink this chat'),
+        ),
+      ];
+    }
+
+    final code = channels.pendingCode;
+    return [
+      _muted('Open the bot and send /link CODE to bind this account to a chat.'),
+      const SizedBox(height: 12),
+      if (code != null)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: OrdoColors.border),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  code,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 3,
+                    color: OrdoColors.foreground,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Copy code',
+                icon: const Icon(Icons.copy, size: 18),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: code));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Code copied')),
+                  );
+                },
+              ),
+            ],
+          ),
+        )
+      else
+        ElevatedButton.icon(
+          onPressed: channels.busy ? null : _generateCode,
+          icon: const Icon(Icons.send, size: 16),
+          label: const Text('Generate link code'),
+        ),
+      const SizedBox(height: 8),
+      Text(
+        '${channels.botUsername.isNotEmpty ? 'Bot: @${channels.botUsername}' : 'Bot username not set (TELEGRAM_BOT_USERNAME).'} Code expires in 15 minutes.',
+        style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground),
+      ),
+    ];
+  }
+
+  List<Widget> _slackSection(ChannelsProvider channels) {
+    if (!channels.slackConfigured) {
+      return [_muted('Slack not configured on the server. Set SLACK_BOT_TOKEN to receive reminders here too.')];
+    }
+
+    final channel = channels.slackChannel;
+    if (channel != null) {
+      return [
+        _linkedTo(channel),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: channels.busy ? null : _unlinkSlack,
+          icon: const Icon(Icons.link_off, size: 16),
+          label: const Text('Unlink Slack'),
+        ),
+      ];
+    }
+
+    return [
+      _muted('Add your workspace channel (e.g. #daily) and reminders, nags and reports go there too.'),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _slackCtrl,
+              decoration: const InputDecoration(hintText: '#general', isDense: true),
+              onSubmitted: (_) => _linkSlack(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: channels.busy ? null : _linkSlack,
+            child: const Text('Link'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'The bot needs to be invited to that channel.',
+        style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground),
+      ),
+    ];
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _generateCode() async {
+    final channels = context.read<ChannelsProvider>();
+    final bot = channels.botUsername;
+    try {
+      final code = await channels.generateTelegramCode();
+      _toast('Open Telegram → @${bot.isEmpty ? 'your bot' : bot} → /link $code');
+    } catch (e) {
+      _toast('Could not create link code');
+    }
+  }
+
+  Future<void> _unlinkTelegram() async {
+    try {
+      await context.read<ChannelsProvider>().unlinkTelegram();
+      _toast('Unlinked');
+    } catch (e) {
+      _toast('Could not unlink');
+    }
+  }
+
+  Future<void> _linkSlack() async {
+    final value = _slackCtrl.text.trim();
+    if (value.isEmpty) return;
+    try {
+      final saved = await context.read<ChannelsProvider>().linkSlack(value);
+      _slackCtrl.clear();
+      _toast('Slack linked to $saved');
+    } catch (e) {
+      _toast('Could not link Slack');
+    }
+  }
+
+  Future<void> _unlinkSlack() async {
+    try {
+      await context.read<ChannelsProvider>().unlinkSlack();
+      _toast('Slack unlinked');
+    } catch (e) {
+      _toast('Could not unlink Slack');
+    }
+  }
 }
+

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/account_menu.dart';
-import '../widgets/onboarding_checklist.dart';
+import '../widgets/notification_bell.dart';
 import 'today_screen.dart';
 import 'routine_screen.dart';
 import 'goals_screen.dart';
@@ -41,22 +41,13 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_tabLabels[_currentIndex]),
         actions: [
+          const NotificationBellButton(),
           AccountMenuButton(onLoginRequired: widget.onLoginRequired),
         ],
       ),
-      body: Column(
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: OnboardingChecklist(),
-          ),
-          Expanded(
-            child: IndexedStack(
-              index: _currentIndex,
-              children: _screens,
-            ),
-          ),
-        ],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

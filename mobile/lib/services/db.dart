@@ -1,5 +1,13 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// A row of `telegram_links` — the chat this account is bound to.
+class TelegramLink {
+  final String chatId;
+  final String username;
+
+  const TelegramLink({required this.chatId, required this.username});
+}
+
 class OrdoDb {
   static final _client = Supabase.instance.client;
 
@@ -137,6 +145,87 @@ class OrdoDb {
       return List<Map<String, dynamic>>.from(res);
     } catch (_) {
       return [];
+    }
+  }
+
+  // --- Notification channels ---
+  static Future<TelegramLink?> telegramLink() async {
+    if (_user == null) return null;
+    try {
+      final res = await _client
+          .from('telegram_links')
+          .select('chat_id, username')
+          .maybeSingle();
+      if (res == null) return null;
+      return TelegramLink(
+        chatId: '${res['chat_id']}',
+        username: (res['username'] as String?) ?? '',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Mints a single-use code; the bot redeems it when the user sends
+  /// `/link CODE`. Expires after 15 minutes, server-side.
+  static Future<String> createTelegramCode() async {
+    if (_user == null) throw Exception('Not logged in');
+    final res = await _client.rpc('create_telegram_code');
+    return '$res';
+  }
+
+  static Future<void> unlinkTelegram() async {
+    if (_user == null) return;
+    await _client.from('telegram_links').delete().eq('user_id', _user!.id);
+  }
+
+  static Future<String?> slackLink() async {
+    if (_user == null) return null;
+    try {
+      final res = await _client.from('slack_links').select('channel').maybeSingle();
+      return res?['channel'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String> linkSlack(String channel) async {
+    if (_user == null) throw Exception('Not logged in');
+    final trimmed = channel.trim();
+    final res = await _client
+        .from('slack_links')
+        .upsert(
+          {'user_id': _user!.id, 'channel': trimmed.startsWith('#') ? trimmed : '#$trimmed'},
+          onConflict: 'user_id',
+        )
+        .select('channel')
+        .single();
+    return res['channel'] as String;
+  }
+
+  static Future<void> unlinkSlack() async {
+    if (_user == null) return;
+    await _client.from('slack_links').delete().eq('user_id', _user!.id);
+  }
+
+  // --- Onboarding ---
+  /// Records progress for reporting; `set_onboarding` only ever flips flags to
+  /// true, and a null argument leaves that flag alone. Failures are swallowed —
+  /// the checklist reads live state, so this is bookkeeping only.
+  static Future<void> setOnboarding({
+    bool? goalSet,
+    bool? routineSet,
+    bool? telegramLinked,
+  }) async {
+    if (_user == null) return;
+    try {
+      await _client.rpc('set_onboarding', params: {
+        'p_goal_set': goalSet,
+        'p_routine_set': routineSet,
+        'p_telegram_linked': telegramLinked,
+      });
+    } catch (_) {
+      // Bookkeeping only — never surface this.
     }
   }
 
