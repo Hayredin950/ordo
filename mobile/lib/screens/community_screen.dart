@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../services/auth_provider.dart';
 import '../services/db.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/preferences_panel.dart';
 import '../themes/app_theme.dart';
 
 class CommunityScreen extends StatefulWidget {
@@ -62,6 +63,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
             ),
           ] else ...[
+            // ── Preferences ──
+            const PreferencesPanel(),
+
             // ── Accountability pairing ──
             _PeerSection(peers: _peers, onRefresh: _loadData),
             const SizedBox(height: 16),

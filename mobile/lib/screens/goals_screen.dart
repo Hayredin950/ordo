@@ -498,10 +498,17 @@ class _LetterForm extends StatefulWidget {
 class _LetterFormState extends State<_LetterForm> {
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
-  final _deadlineCtrl = TextEditingController(
-    text: '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${(DateTime.now().day + 30).toString().padLeft(2, '0')}',
-  );
+  late final TextEditingController _deadlineCtrl;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final defaultDate = DateTime.now().add(const Duration(days: 30));
+    _deadlineCtrl = TextEditingController(
+      text: '${defaultDate.year}-${defaultDate.month.toString().padLeft(2, '0')}-${defaultDate.day.toString().padLeft(2, '0')}',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -513,10 +520,35 @@ class _LetterFormState extends State<_LetterForm> {
           style: TextStyle(color: OrdoColors.foreground),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: _deadlineCtrl,
-          decoration: InputDecoration(hintText: 'Delivery date (YYYY-MM-DD)'),
-          style: TextStyle(color: OrdoColors.foreground),
+        GestureDetector(
+          onTap: () async {
+            final now = DateTime.now();
+            final parts = _deadlineCtrl.text.split('-');
+            final initial = parts.length == 3
+                ? DateTime.tryParse(_deadlineCtrl.text) ?? now.add(const Duration(days: 30))
+                : now.add(const Duration(days: 30));
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: initial,
+              firstDate: now,
+              lastDate: now.add(const Duration(days: 3650)),
+            );
+            if (picked != null) {
+              setState(() {
+                _deadlineCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+              });
+            }
+          },
+          child: AbsorbPointer(
+            child: TextField(
+              controller: _deadlineCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Delivery date',
+                suffixIcon: Icon(Icons.calendar_today, size: 18),
+              ),
+              style: TextStyle(color: OrdoColors.foreground),
+            ),
+          ),
         ),
         const SizedBox(height: 8),
         TextField(

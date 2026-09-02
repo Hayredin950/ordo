@@ -58,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } else if (_mode == 'login') {
         await auth.login(_emailCtrl.text, _passCtrl.text);
+        if (mounted) Navigator.of(context).pop();
       } else if (_mode == 'code') {
         await auth.sendOtp(_emailCtrl.text);
         setState(() { _pending = 'signin'; });
@@ -75,6 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() { _error = null; _busy = true; });
     try {
       await context.read<AuthProvider>().verifyOtp(_emailCtrl.text, _codeCtrl.text);
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       setState(() => _error = 'Invalid code. Please try again.');
     } finally {
@@ -98,6 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() { _busy = true; _error = null; });
     try {
       await context.read<AuthProvider>().oauthSignIn(provider);
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       setState(() => _error = e.toString().replaceAll('Exception: ', ''));
     } finally {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/account_menu.dart';
+import '../widgets/onboarding_checklist.dart';
 import 'today_screen.dart';
 import 'routine_screen.dart';
 import 'goals_screen.dart';
@@ -43,9 +44,19 @@ class _HomeScreenState extends State<HomeScreen> {
           AccountMenuButton(onLoginRequired: widget.onLoginRequired),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      body: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: OnboardingChecklist(),
+          ),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _screens,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

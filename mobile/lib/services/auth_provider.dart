@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
-import 'package:supabase_flutter/supabase_flutter.dart' show LaunchMode;
 
 class AuthProvider extends ChangeNotifier {
   final _client = supa.Supabase.instance.client;
+  final _googleSignIn = GoogleSignIn(
+    serverClientId: '117497452116-d2gs94rjubfh6ek4eb5d5qkfr3ml0iit.apps.googleusercontent.com',
+  );
   bool _loading = true;
 
   supa.User? get user => _client.auth.currentUser;
@@ -70,16 +73,32 @@ class AuthProvider extends ChangeNotifier {
   Future<void> oauthSignIn(String provider) async {
     _loading = true;
     notifyListeners();
-    final providerEnum = provider == 'github'
-        ? supa.OAuthProvider.github
-        : supa.OAuthProvider.google;
-    await _client.auth.signInWithOAuth(
-      providerEnum,
-      redirectTo: 'io.supabase.ordo://login-callback/',
-      authScreenLaunchMode: LaunchMode.inAppWebView,
+    try {
+      if (provider == 'github') {
+        await _client.auth.signInWithOAuth(
+          supa.OAuthProvider.github,
+          redirectTo: 'io.supabase.ordo://login-callback/',
+        );
+      } else if (provider == 'google') {
+        await _signInWithGoogle();
+      }
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    await _googleSignIn.signOut();
+    final account = await _googleSignIn.signIn();
+    if (account == null) return;
+    final authentication = await account.authentication;
+    final idToken = authentication.idToken;
+    if (idToken == null) throw Exception('Failed to get Google ID token');
+    await _client.auth.signInWithIdToken(
+      provider: supa.OAuthProvider.google,
+      idToken: idToken,
     );
-    _loading = false;
-    notifyListeners();
   }
 
   Future<void> logout() async {
