@@ -306,7 +306,7 @@ class _BlockTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Time range
-          Text(formatTimeRange(block.start, block.end),
+          Text(formatTimeRange(block.start, block.end, hour12: hour12Of(context)),
               style: TextStyle(fontSize: 13, color: OrdoColors.mutedForeground)),
           const SizedBox(height: 6),
           // Title + must badge
@@ -581,7 +581,7 @@ class _NotificationChannelsState extends State<_NotificationChannels> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final channels = context.watch<ChannelsProvider>();
-    final hour12 = (context.watch<OrdoProvider>().state?.settings?.hourFormat ?? '24h') == '12h';
+    final hour12 = hour12Of(context);
 
     return Panel(
       child: Column(

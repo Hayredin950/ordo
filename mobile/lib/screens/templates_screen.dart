@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/ordo_state.dart';
 import '../services/state_provider.dart';
+import '../utils/ordo.dart';
 import '../widgets/app_widgets.dart';
 import '../themes/app_theme.dart';
 
@@ -104,7 +105,7 @@ class TemplatesScreen extends StatelessWidget {
                             child: Text(b.title,
                                 style: TextStyle(fontSize: 13, color: OrdoColors.foreground)),
                           ),
-                          Text('${b.start}–${b.end}',
+                          Text(formatTimeRange(b.start, b.end, hour12: hour12Of(context)),
                               style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground)),
                         ],
                       ),

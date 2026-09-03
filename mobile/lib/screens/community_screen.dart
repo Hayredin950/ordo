@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../services/auth_provider.dart';
 import '../services/db.dart';
 import '../widgets/app_widgets.dart';
-import '../widgets/preferences_panel.dart';
 import '../themes/app_theme.dart';
 
 class CommunityScreen extends StatefulWidget {
@@ -63,9 +61,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
             ),
           ] else ...[
-            // ── Preferences ──
-            const PreferencesPanel(),
-
             // ── Accountability pairing ──
             _PeerSection(peers: _peers, onRefresh: _loadData),
             const SizedBox(height: 16),
@@ -440,9 +435,7 @@ class _ChallengeSectionState extends State<_ChallengeSection> {
     if (_nameCtrl.text.trim().isEmpty) return;
     final days = int.tryParse(_daysCtrl.text) ?? 30;
     try {
-      final now = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final ends = DateFormat('yyyy-MM-dd').format(DateTime.now().add(Duration(days: days)));
-      await OrdoDb.createChallenge(_nameCtrl.text.trim(), now, ends);
+      await OrdoDb.createChallenge(_nameCtrl.text.trim(), days);
       _nameCtrl.clear();
       widget.onRefresh();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(

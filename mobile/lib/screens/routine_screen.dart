@@ -354,13 +354,18 @@ class _RoutineScreenState extends State<RoutineScreen> {
     final parts = current.split(':');
     final h = int.tryParse(parts[0]) ?? 8;
     final m = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+    final hour12 = hour12Of(context);
     return GestureDetector(
       onTap: () async {
         final picked = await showTimePicker(
           context: context,
           initialTime: TimeOfDay(hour: h, minute: m),
           builder: (context, child) {
-            return Theme(data: Theme.of(context).copyWith(timePickerTheme: TimePickerThemeData(backgroundColor: OrdoColors.surface, hourMinuteColor: OrdoColors.card, dayPeriodColor: OrdoColors.card)), child: child!);
+            // The dial follows the app's own preference, not the device locale.
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: !hour12),
+              child: Theme(data: Theme.of(context).copyWith(timePickerTheme: TimePickerThemeData(backgroundColor: OrdoColors.surface, hourMinuteColor: OrdoColors.card, dayPeriodColor: OrdoColors.card)), child: child!),
+            );
           },
         );
         if (picked != null) onChanged('${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
@@ -371,7 +376,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground)),
           const SizedBox(height: 4),
-          Text(current, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: OrdoColors.foreground)),
+          Text(formatTime(current, hour12: hour12), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: OrdoColors.foreground)),
         ]),
       ),
     );
@@ -429,7 +434,7 @@ class _BlockRow extends StatelessWidget {
               children: [
                 Text(block.title, style: const TextStyle(fontWeight: FontWeight.w600, color: OrdoColors.foreground)),
                 const SizedBox(height: 2),
-                Text(formatTimeRange(block.start, block.end), style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
+                Text(formatTimeRange(block.start, block.end, hour12: hour12Of(context)), style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
                 const SizedBox(height: 4),
                 CategoryPill(id: block.category),
               ],
@@ -554,12 +559,16 @@ class _BlockRow extends StatelessWidget {
     final parts = current.split(':');
     final h = int.tryParse(parts[0]) ?? 8;
     final m = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+    final hour12 = hour12Of(context);
     return GestureDetector(
       onTap: () async {
         final picked = await showTimePicker(
           context: context,
           initialTime: TimeOfDay(hour: h, minute: m),
-          builder: (context, child) => Theme(data: Theme.of(context).copyWith(timePickerTheme: TimePickerThemeData(backgroundColor: OrdoColors.surface)), child: child!),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: !hour12),
+            child: Theme(data: Theme.of(context).copyWith(timePickerTheme: TimePickerThemeData(backgroundColor: OrdoColors.surface)), child: child!),
+          ),
         );
         if (picked != null) onChanged('${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
       },
@@ -569,7 +578,7 @@ class _BlockRow extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground)),
           const SizedBox(height: 4),
-          Text(current, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: OrdoColors.foreground)),
+          Text(formatTime(current, hour12: hour12), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: OrdoColors.foreground)),
         ]),
       ),
     );

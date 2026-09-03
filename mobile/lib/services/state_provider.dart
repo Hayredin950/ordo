@@ -1,17 +1,38 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 import '../models/ordo_state.dart';
+import '../utils/ordo.dart';
+
+/// The 12h/24h preference, watched so flipping it in Settings repaints every
+/// clock on screen. Documents written before preferences existed carry no
+/// `settings` key; those read as 24h.
+bool hour12Of(BuildContext context) =>
+    isHour12(context.watch<OrdoProvider>().state);
 
 class OrdoProvider extends ChangeNotifier {
   final _client = supa.Supabase.instance.client;
   OrdoState? _state;
   bool _loading = true;
-  bool _dirty = false;
+  Timer? _saveTimer;
+
+  /// True once a signed-in load has actually come back from Postgres. Until it
+  /// does, `_state` is the demo document, and pushing that up would overwrite
+  /// the real one — so saves stay off.
+  bool _synced = false;
 
   OrdoState? get state => _state;
   bool get loading => _loading;
 
   supa.User? get _user => _client.auth.currentUser;
+
+  @override
+  void dispose() {
+    _saveTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> init() async {
     _loading = true;
@@ -19,6 +40,7 @@ class OrdoProvider extends ChangeNotifier {
 
     if (_user == null) {
       _state = defaultState();
+      _synced = false;
       _loading = false;
       notifyListeners();
       return;
@@ -37,48 +59,49 @@ class OrdoProvider extends ChangeNotifier {
           .eq('user_id', _user!.id)
           .maybeSingle();
 
+      _synced = true;
       if (res != null && res['state'] != null) {
         _state = OrdoState.fromJson(res['state'] as Map<String, dynamic>);
       } else {
-        _state = defaultState();
+        // No document yet — adopt the local one, same as the web does.
+        _state ??= defaultState();
         await _saveToSupabase();
       }
     } catch (e) {
-      _state = defaultState();
+      debugPrint('[sync] load failed: $e');
+      _state ??= defaultState();
+      _synced = false;
     }
   }
 
+  /// Writes go through `save_state()`, which also pushes the outgoing document
+  /// onto the undo stack. The client has no INSERT/UPDATE privilege on
+  /// `user_state`, so a direct upsert here would be denied.
   Future<void> _saveToSupabase() async {
     if (_state == null || _user == null) return;
     try {
-      await _client.from('user_state').upsert({
-        'user_id': _user!.id,
-        'state': _state!.toJson(),
-      });
+      await _client.rpc('save_state', params: {'p_state': _state!.toJson()});
     } catch (e) {
-      debugPrint('Failed to save state: $e');
+      debugPrint('[sync] save failed: $e');
     }
   }
 
   void update(OrdoState Function(OrdoState) fn) {
     _state = fn(_state!);
-    _dirty = true;
     notifyListeners();
     _debounceSave();
   }
 
-  Future<void> _debounceSave() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (_dirty) {
-      _dirty = false;
-      await _saveToSupabase();
-    }
+  void _debounceSave() {
+    if (_user == null || !_synced) return;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 600), _saveToSupabase);
   }
 
   void reset() {
     _state = defaultState();
     notifyListeners();
-    _saveToSupabase();
+    _debounceSave();
   }
 
   Future<void> reload() async {
@@ -90,7 +113,9 @@ class OrdoProvider extends ChangeNotifier {
   }
 
   void setLocalState() {
+    _saveTimer?.cancel();
     _state = defaultState();
+    _synced = false;
     _loading = false;
     notifyListeners();
   }

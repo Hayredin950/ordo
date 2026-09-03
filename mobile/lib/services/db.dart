@@ -25,11 +25,11 @@ class OrdoDb {
   }
 
   static Future<void> pairWithEmail(String email) async {
-    await _client.rpc('pair_with_email', params: {'target_email': email});
+    await _client.rpc('pair_with_email', params: {'p_email': email});
   }
 
   static Future<void> unpair(String peerId) async {
-    await _client.rpc('unpair', params: {'target_user': peerId});
+    await _client.rpc('unpair', params: {'p_peer': peerId});
   }
 
   // --- Challenges ---
@@ -43,11 +43,12 @@ class OrdoDb {
     }
   }
 
-  static Future<void> createChallenge(String name, String startsOn, String endsOn) async {
+  /// `create_challenge` takes a length in days and derives the dates itself;
+  /// it rejects anything outside 7–90.
+  static Future<void> createChallenge(String name, int days) async {
     await _client.rpc('create_challenge', params: {
       'p_name': name,
-      'p_starts_on': startsOn,
-      'p_ends_on': endsOn,
+      'p_days': days,
     });
   }
 
@@ -116,7 +117,7 @@ class OrdoDb {
 
   static Future<void> copyPublicTemplate(String templateId) async {
     await _client.rpc('copy_public_template', params: {
-      'p_template': templateId,
+      'p_id': templateId,
     });
   }
 
