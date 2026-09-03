@@ -9,7 +9,7 @@ import {
 } from "@/lib/ordo";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
 import { useAuth } from "@/lib/auth-context";
-import { undoState } from "@/lib/db";
+import { undoState, redoState } from "@/lib/db";
 import { downloadExport, type ExportKind } from "@/lib/export";
 import { AppShell, type TabId } from "@/components/ordo/AppShell";
 import { TodayView } from "@/components/ordo/TodayView";
@@ -55,6 +55,7 @@ function OrdoApp() {
   const { user } = useAuth();
   const [tab, setTab] = useState<TabId>("Today");
   const [undoBusy, setUndoBusy] = useState(false);
+  const [redoBusy, setRedoBusy] = useState(false);
 
   /**
    * Switching section from the bottom bar leaves the viewport wherever the last
@@ -76,6 +77,20 @@ function OrdoApp() {
       toast.error(err instanceof Error ? err.message : "Nothing to undo");
     } finally {
       setUndoBusy(false);
+    }
+  };
+
+  const redo = async () => {
+    if (!user) return;
+    setRedoBusy(true);
+    try {
+      const restored = await redoState();
+      update(() => restored);
+      toast.success("Last change redone");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nothing to redo");
+    } finally {
+      setRedoBusy(false);
     }
   };
 
@@ -112,6 +127,8 @@ function OrdoApp() {
         week={week}
         undoBusy={undoBusy}
         onUndo={() => void undo()}
+        redoBusy={redoBusy}
+        onRedo={() => void redo()}
         onReset={reset}
         onExport={handleExport}
         hourFormat={hourFormatOf(state)}

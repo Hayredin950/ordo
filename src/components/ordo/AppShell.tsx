@@ -29,6 +29,7 @@ import {
   Shield,
   Sparkles,
   Target,
+  Redo2,
   Undo2,
   Users,
 } from "lucide-react";
@@ -56,6 +57,8 @@ type ShellProps = {
   week: number;
   undoBusy: boolean;
   onUndo: () => void;
+  redoBusy: boolean;
+  onRedo: () => void;
   onReset: () => void;
   onExport: (kind: ExportKind) => void;
   /** Current clock preference, and the one-tap way to flip it. */
@@ -93,13 +96,22 @@ function WeekScore({ value }: { value: number }) {
 function AccountMenu({
   undoBusy,
   onUndo,
+  redoBusy,
+  onRedo,
   onReset,
   onExport,
   hourFormat,
   onHourFormat,
 }: Pick<
   ShellProps,
-  "undoBusy" | "onUndo" | "onReset" | "onExport" | "hourFormat" | "onHourFormat"
+  | "undoBusy"
+  | "onUndo"
+  | "redoBusy"
+  | "onRedo"
+  | "onReset"
+  | "onExport"
+  | "hourFormat"
+  | "onHourFormat"
 >) {
   const { user, isAdmin, logout } = useAuth();
   if (!user) return null;
@@ -136,6 +148,9 @@ function AccountMenu({
         <DropdownMenuItem className="lg:hidden" disabled={undoBusy} onSelect={onUndo}>
           <Undo2 /> Undo last change
         </DropdownMenuItem>
+        <DropdownMenuItem className="lg:hidden" disabled={redoBusy} onSelect={onRedo}>
+          <Redo2 /> Redo last change
+        </DropdownMenuItem>
         <DropdownMenuItem className="lg:hidden" onSelect={onReset}>
           <RotateCcw /> Reset my data
         </DropdownMenuItem>
@@ -165,6 +180,8 @@ export function AppShell({
   week,
   undoBusy,
   onUndo,
+  redoBusy,
+  onRedo,
   onReset,
   onExport,
   hourFormat,
@@ -244,6 +261,17 @@ export function AppShell({
                   variant="ghost"
                   size="icon"
                   className="hidden lg:inline-flex"
+                  aria-label="Redo last change"
+                  title="Redo last change"
+                  disabled={redoBusy}
+                  onClick={onRedo}
+                >
+                  <Redo2 className={cn("size-4", redoBusy && "animate-pulse")} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden lg:inline-flex"
                   aria-label="Reset my data"
                   title="Reset my data"
                   onClick={onReset}
@@ -253,6 +281,8 @@ export function AppShell({
                 <AccountMenu
                   undoBusy={undoBusy}
                   onUndo={onUndo}
+                  redoBusy={redoBusy}
+                  onRedo={onRedo}
                   onReset={onReset}
                   onExport={onExport}
                   hourFormat={hourFormat}

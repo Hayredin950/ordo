@@ -69,6 +69,12 @@ export async function undoState(): Promise<OrdoState> {
   return data as OrdoState;
 }
 
+export async function redoState(): Promise<OrdoState> {
+  const { data, error } = await sb().rpc("redo_state");
+  if (error) throw dbError(error, "Nothing to redo");
+  return data as OrdoState;
+}
+
 export async function loadHistory(): Promise<OrdoState[]> {
   const { data, error } = await sb().from("user_state").select("history").maybeSingle();
   if (error) throw dbError(error, "Could not load history");
