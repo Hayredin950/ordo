@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 import '../models/ordo_state.dart';
 import '../utils/ordo.dart';
+import 'db.dart';
 
 /// The 12h/24h preference, watched so flipping it in Settings repaints every
 /// clock on screen. Documents written before preferences existed carry no
@@ -23,8 +24,15 @@ class OrdoProvider extends ChangeNotifier {
   /// the real one — so saves stay off.
   bool _synced = false;
 
+  /// Documents that [undo] stepped away from, newest last. The undo history
+  /// itself lives in Postgres; this branch is session-scoped, so redo is
+  /// available until the app closes, not across devices.
+  final List<OrdoState> _redoStack = [];
+  static const _redoLimit = 30;
+
   OrdoState? get state => _state;
   bool get loading => _loading;
+  bool get canRedo => _redoStack.isNotEmpty;
 
   supa.User? get _user => _client.auth.currentUser;
 
@@ -78,7 +86,7 @@ class OrdoProvider extends ChangeNotifier {
   /// onto the undo stack. The client has no INSERT/UPDATE privilege on
   /// `user_state`, so a direct upsert here would be denied.
   Future<void> _saveToSupabase() async {
-    if (_state == null || _user == null) return;
+    if (_state == null || _user == null || !_synced) return;
     try {
       await _client.rpc('save_state', params: {'p_state': _state!.toJson()});
     } catch (e) {
@@ -88,6 +96,8 @@ class OrdoProvider extends ChangeNotifier {
 
   void update(OrdoState Function(OrdoState) fn) {
     _state = fn(_state!);
+    // A fresh edit abandons whatever branch redo was holding.
+    _redoStack.clear();
     notifyListeners();
     _debounceSave();
   }
@@ -98,8 +108,39 @@ class OrdoProvider extends ChangeNotifier {
     _saveTimer = Timer(const Duration(milliseconds: 600), _saveToSupabase);
   }
 
+  /// Pops the server-side history via `undo_state()` and remembers the document
+  /// we left, so [redo] can put it back. False means there was nothing to undo.
+  Future<bool> undo() async {
+    final before = _state;
+    if (before == null) return false;
+
+    final doc = await OrdoDb.undoState();
+    if (doc == null) return false;
+
+    // The server document has already moved; a pending save would push the
+    // pre-undo document straight back.
+    _saveTimer?.cancel();
+    _redoStack.add(before);
+    if (_redoStack.length > _redoLimit) _redoStack.removeAt(0);
+    _state = OrdoState.fromJson(doc);
+    notifyListeners();
+    return true;
+  }
+
+  /// Re-applies the most recently undone document. It saves through the normal
+  /// path, so the document it replaces lands back on the undo stack.
+  Future<bool> redo() async {
+    if (_redoStack.isEmpty) return false;
+    _saveTimer?.cancel();
+    _state = _redoStack.removeLast();
+    notifyListeners();
+    await _saveToSupabase();
+    return true;
+  }
+
   void reset() {
     _state = defaultState();
+    _redoStack.clear();
     notifyListeners();
     _debounceSave();
   }
@@ -115,6 +156,7 @@ class OrdoProvider extends ChangeNotifier {
   void setLocalState() {
     _saveTimer?.cancel();
     _state = defaultState();
+    _redoStack.clear();
     _synced = false;
     _loading = false;
     notifyListeners();

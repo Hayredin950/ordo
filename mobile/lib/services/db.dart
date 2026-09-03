@@ -237,13 +237,16 @@ class OrdoDb {
   }
 
   // --- Undo ---
-  static Future<bool> undoState() async {
-    if (_user == null) return false;
+  /// Pops the newest entry off the server-side history and returns the document
+  /// it restored. Null means there was nothing to undo — `undo_state()` raises
+  /// P0002 in that case.
+  static Future<Map<String, dynamic>?> undoState() async {
+    if (_user == null) return null;
     try {
-      await _client.rpc('undo_state');
-      return true;
+      final res = await _client.rpc('undo_state');
+      return res is Map ? Map<String, dynamic>.from(res) : null;
     } catch (_) {
-      return false;
+      return null;
     }
   }
 }

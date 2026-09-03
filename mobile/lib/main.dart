@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'services/state_provider.dart';
 import 'services/auth_provider.dart';
+import 'services/alarm_provider.dart';
 import 'services/categories_provider.dart';
 import 'services/channels_provider.dart';
 import 'screens/home_screen.dart';
@@ -27,6 +28,7 @@ class OrdoApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => OrdoProvider()..init()),
         ChangeNotifierProvider(create: (_) => CategoriesProvider()),
         ChangeNotifierProvider(create: (_) => ChannelsProvider()),
+        ChangeNotifierProvider(create: (_) => AlarmProvider()..load()),
       ],
       child: MaterialApp(
         title: 'Ordo',

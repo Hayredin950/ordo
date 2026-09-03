@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../services/alarm_provider.dart';
 import '../services/state_provider.dart';
 import '../models/ordo_state.dart';
 import '../themes/app_theme.dart';
+import '../widgets/alarm_settings_sheet.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final alarm = context.watch<AlarmProvider>();
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: Consumer<OrdoProvider>(
@@ -36,6 +39,22 @@ class SettingsScreen extends StatelessWidget {
                     settings: Settings(hourFormat: newFormat),
                   ));
                 },
+              ),
+              const SizedBox(height: 24),
+              const Text('Focus',
+                  style: TextStyle(
+                      fontFamily: 'SpaceGrotesk',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: OrdoColors.primary)),
+              const SizedBox(height: 12),
+              _SettingsTile(
+                icon: alarm.enabled ? Icons.alarm : Icons.alarm_off,
+                title: 'Timer Alarm',
+                subtitle: alarm.enabled
+                    ? '${alarm.sound.label}${alarm.vibrate ? ' + vibrate' : ''}'
+                    : 'Off',
+                onTap: () => showAlarmSettingsSheet(context),
               ),
               const SizedBox(height: 24),
               const Text('Data',

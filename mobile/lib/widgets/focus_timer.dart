@@ -1,8 +1,13 @@
+import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:provider/provider.dart';
+import '../services/alarm_provider.dart';
 import '../themes/app_theme.dart';
+import 'alarm_settings_sheet.dart';
 import 'app_widgets.dart';
+import 'duration_sheet.dart';
 
 class _Preset {
   final String label;
@@ -23,72 +28,117 @@ class FocusTimer extends StatefulWidget {
   State<FocusTimer> createState() => _FocusTimerState();
 }
 
-class _FocusTimerState extends State<FocusTimer> with TickerProviderStateMixin {
+class _FocusTimerState extends State<FocusTimer> {
   static const _defaultTotal = 25 * 60;
 
-  late int _total = _defaultTotal;
-  late int _secondsLeft = _defaultTotal;
-  bool _running = false;
-  Ticker? _ticker;
+  int _total = _defaultTotal;
+  int _secondsLeft = _defaultTotal;
+
+  /// Wall-clock finish line, non-null exactly while the timer runs. Counting
+  /// down to a deadline rather than up from a tick count is what makes pause
+  /// and resume behave — and it stays honest while the app is backgrounded.
+  DateTime? _deadline;
+  Timer? _tick;
+  bool _finished = false;
+
+  bool get _running => _deadline != null;
+  bool get _isCustom => !_presets.any((p) => p.minutes * 60 == _total);
 
   @override
   void dispose() {
-    _ticker?.dispose();
+    _tick?.cancel();
     super.dispose();
   }
 
   // ── Timer logic ──────────────────────────────────────────────────────
 
-  void _startTicker() {
-    _ticker?.dispose();
-    _ticker = createTicker(_onTick);
-    _ticker!.start();
+  int _remaining() {
+    final deadline = _deadline;
+    if (deadline == null) return _secondsLeft;
+    final ms = deadline.difference(DateTime.now()).inMilliseconds;
+    return ms <= 0 ? 0 : (ms / 1000).ceil();
   }
 
-  void _stopTicker() {
-    _ticker?.stop();
+  void _start() {
+    _tick?.cancel();
+    final from = _secondsLeft > 0 ? _secondsLeft : _total;
+    setState(() {
+      _finished = false;
+      _secondsLeft = from;
+      _deadline = DateTime.now().add(Duration(seconds: from));
+    });
+    _tick = Timer.periodic(const Duration(milliseconds: 200), (_) => _onTick());
   }
 
-  void _onTick(Duration elapsed) {
-    final elapsedSec = elapsed.inSeconds;
-    final remaining = _total - elapsedSec;
-    if (remaining <= 0) {
-      setState(() {
-        _secondsLeft = 0;
-        _running = false;
-      });
-      _ticker?.stop();
-    } else {
-      setState(() => _secondsLeft = remaining);
+  void _pause() {
+    _tick?.cancel();
+    _tick = null;
+    setState(() {
+      _secondsLeft = _remaining();
+      _deadline = null;
+    });
+  }
+
+  void _onTick() {
+    final left = _remaining();
+    if (left <= 0) {
+      _complete();
+    } else if (left != _secondsLeft) {
+      setState(() => _secondsLeft = left);
     }
+  }
+
+  void _complete() {
+    _tick?.cancel();
+    _tick = null;
+    setState(() {
+      _secondsLeft = 0;
+      _deadline = null;
+      _finished = true;
+    });
+
+    final alarm = context.read<AlarmProvider>();
+    alarm.fire();
+    if (!alarm.enabled) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: const Text("Time's up — log the block you just worked."),
+      duration: const Duration(seconds: 10),
+      action: SnackBarAction(label: 'Stop', onPressed: alarm.stop),
+    ));
+  }
+
+  // ── Controls ─────────────────────────────────────────────────────────
+
+  /// Everything that puts a fresh session on the clock silences a still-ringing
+  /// alarm first, so the tone never bleeds into the next block.
+  void _resetTo(int seconds) {
+    _tick?.cancel();
+    _tick = null;
+    context.read<AlarmProvider>().stop();
+    setState(() {
+      _finished = false;
+      _deadline = null;
+      _total = seconds;
+      _secondsLeft = seconds;
+    });
   }
 
   void _toggle() {
-    setState(() {
-      _running = !_running;
-    });
     if (_running) {
-      _startTicker();
+      _pause();
     } else {
-      _stopTicker();
+      context.read<AlarmProvider>().stop();
+      _start();
     }
   }
 
-  void _reset() {
-    _stopTicker();
-    setState(() {
-      _running = false;
-      _secondsLeft = _total;
-    });
-  }
+  void _reset() => _resetTo(_total);
 
-  void _select(int minutes) {
-    _stopTicker();
-    setState(() {
-      _running = false;
-      _total = minutes * 60;
-      _secondsLeft = minutes * 60;
-    });
+  void _select(int minutes) => _resetTo(minutes * 60);
+
+  Future<void> _pickCustom() async {
+    final minutes = await showCustomDurationSheet(context, _total ~/ 60);
+    if (minutes != null && mounted) _select(minutes);
   }
 
   // ── Derived values ───────────────────────────────────────────────────
@@ -103,7 +153,8 @@ class _FocusTimerState extends State<FocusTimer> with TickerProviderStateMixin {
 
   String get _buttonLabel {
     if (_running) return 'Pause';
-    if (_secondsLeft == 0) return 'Restart';
+    if (_finished) return 'Restart';
+    if (_secondsLeft < _total) return 'Resume';
     return 'Start';
   }
 
@@ -114,13 +165,14 @@ class _FocusTimerState extends State<FocusTimer> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final alarm = context.watch<AlarmProvider>();
+
     return Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Title row
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
                 child: Column(
@@ -139,22 +191,42 @@ class _FocusTimerState extends State<FocusTimer> with TickerProviderStateMixin {
                   ],
                 ),
               ),
+              IconButton(
+                tooltip: alarm.enabled ? 'Alarm: ${alarm.sound.label}' : 'Alarm off',
+                onPressed: () => showAlarmSettingsSheet(context),
+                icon: Icon(
+                  alarm.enabled
+                      ? Icons.notifications_active_outlined
+                      : Icons.notifications_off_outlined,
+                  size: 20,
+                  color: alarm.ringing ? OrdoColors.primary : OrdoColors.mutedForeground,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
 
-          // Preset chips
-          Row(
-            children: _presets
-                .map((p) => Padding(
+          // Presets plus Custom — four chips do not share a phone line.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ..._presets.map((p) => Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: _PresetChip(
                         label: p.label,
                         active: _total == p.minutes * 60,
                         onTap: () => _select(p.minutes),
                       ),
-                    ))
-                .toList(),
+                    )),
+                _PresetChip(
+                  label: _isCustom ? 'Custom · ${_total ~/ 60}m' : 'Custom',
+                  active: _isCustom,
+                  icon: Icons.tune,
+                  onTap: _pickCustom,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -166,7 +238,6 @@ class _FocusTimerState extends State<FocusTimer> with TickerProviderStateMixin {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Background ring
                   SizedBox.expand(
                     child: CustomPaint(
                       painter: _RingPainter(
@@ -176,25 +247,38 @@ class _FocusTimerState extends State<FocusTimer> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  // Progress ring
                   SizedBox.expand(
                     child: CustomPaint(
                       painter: _RingPainter(
                         progress: _elapsed.clamp(0.0, 1.0),
-                        color: OrdoColors.primary,
+                        color: _finished ? OrdoColors.destructive : OrdoColors.primary,
                         strokeWidth: 8,
                       ),
                     ),
                   ),
-                  // Time display
-                  Text(
-                    _display,
-                    style: const TextStyle(
-                      fontFamily: 'SpaceGrotesk',
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      color: OrdoColors.foreground,
-                    ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _display,
+                        style: const TextStyle(
+                          fontFamily: 'SpaceGrotesk',
+                          fontSize: 32,
+                          fontWeight: FontWeight.w700,
+                          color: OrdoColors.foreground,
+                        ),
+                      ),
+                      if (_finished)
+                        Text("Time's up",
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: OrdoColors.destructive))
+                      else
+                        Text('${_total ~/ 60} min session',
+                            style: TextStyle(
+                                fontSize: 11, color: OrdoColors.mutedForeground)),
+                    ],
                   ),
                 ],
               ),
@@ -202,7 +286,26 @@ class _FocusTimerState extends State<FocusTimer> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 16),
 
-          // Start / Pause + Reset buttons
+          // Only shown while the alarm is actually sounding.
+          if (alarm.ringing) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: alarm.stop,
+                icon: const Icon(Icons.alarm_off_rounded, size: 20),
+                label: const Text('Stop alarm'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OrdoColors.destructive,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          // Start / Pause + Reset
           Row(
             children: [
               Expanded(
@@ -297,16 +400,19 @@ class _RingPainter extends CustomPainter {
 class _PresetChip extends StatelessWidget {
   final String label;
   final bool active;
+  final IconData? icon;
   final VoidCallback onTap;
 
   const _PresetChip({
     required this.label,
     required this.active,
     required this.onTap,
+    this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = active ? OrdoColors.primary : OrdoColors.mutedForeground;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -319,13 +425,21 @@ class _PresetChip extends StatelessWidget {
             width: active ? 1.5 : 1,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: active ? OrdoColors.primary : OrdoColors.mutedForeground,
-          ),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
         ),
       ),
     );

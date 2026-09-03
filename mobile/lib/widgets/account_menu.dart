@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
 import '../services/state_provider.dart';
-import '../services/db.dart';
 import '../models/ordo_state.dart';
 import '../themes/app_theme.dart';
 import '../screens/settings_screen.dart';
@@ -170,6 +169,27 @@ class AccountMenuButton extends StatelessWidget {
             ),
           ),
 
+          // Redo — only live once something has been undone this session.
+          PopupMenuItem<String>(
+            value: 'redo',
+            enabled: ordo.canRedo,
+            child: Row(
+              children: [
+                Icon(Icons.redo,
+                    size: 20,
+                    color: ordo.canRedo
+                        ? OrdoColors.mutedForeground
+                        : OrdoColors.mutedForeground.withValues(alpha: 0.4)),
+                const SizedBox(width: 12),
+                Text('Redo',
+                    style: TextStyle(
+                        color: ordo.canRedo
+                            ? OrdoColors.foreground
+                            : OrdoColors.mutedForeground.withValues(alpha: 0.4))),
+              ],
+            ),
+          ),
+
           // Reset data
           PopupMenuItem<String>(
             value: 'reset',
@@ -236,6 +256,10 @@ class AccountMenuButton extends StatelessWidget {
         _undo(context, ordo);
         break;
 
+      case 'redo':
+        _redo(context, ordo);
+        break;
+
       case 'reset':
         _showResetDialog(context, ordo);
         break;
@@ -247,15 +271,22 @@ class AccountMenuButton extends StatelessWidget {
   }
 
   Future<void> _undo(BuildContext context, OrdoProvider prov) async {
-    final success = await OrdoDb.undoState();
-    if (success) {
-      await prov.reload();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Undone')),
-        );
-      }
-    }
+    final ok = await prov.undo();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'Undone' : 'Nothing left to undo'),
+      action: ok
+          ? SnackBarAction(label: 'Redo', onPressed: () => prov.redo())
+          : null,
+    ));
+  }
+
+  Future<void> _redo(BuildContext context, OrdoProvider prov) async {
+    final ok = await prov.redo();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'Redone' : 'Nothing to redo'),
+    ));
   }
 
   void _exportJson(BuildContext context, OrdoProvider prov, AuthProvider auth) {

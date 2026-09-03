@@ -508,7 +508,31 @@ class _LetterFormState extends State<_LetterForm> {
     _deadlineCtrl = TextEditingController(
       text: '${defaultDate.year}-${defaultDate.month.toString().padLeft(2, '0')}-${defaultDate.day.toString().padLeft(2, '0')}',
     );
+    // The Seal button is enabled from these three fields, so every keystroke
+    // has to rebuild — without this it stays disabled from its first frame.
+    for (final c in [_titleCtrl, _bodyCtrl, _deadlineCtrl]) {
+      c.addListener(_onFieldChanged);
+    }
   }
+
+  void _onFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_titleCtrl, _bodyCtrl, _deadlineCtrl]) {
+      c.removeListener(_onFieldChanged);
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  bool get _canSeal =>
+      !_busy &&
+      _titleCtrl.text.trim().isNotEmpty &&
+      _bodyCtrl.text.trim().isNotEmpty &&
+      _deadlineCtrl.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -561,7 +585,7 @@ class _LetterFormState extends State<_LetterForm> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: (_busy || _titleCtrl.text.isEmpty || _deadlineCtrl.text.isEmpty || _bodyCtrl.text.isEmpty)
+            onPressed: !_canSeal
                 ? null
                 : () async {
                     setState(() => _busy = true);
