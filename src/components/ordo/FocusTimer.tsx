@@ -126,7 +126,6 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
     <Panel>
       <PanelTitle
         title="Focus timer"
-        hint="One block at a time — the timer is the task."
         action={
           <ScrollRow className="sm:justify-end">
             {PRESETS.map((p) => (
