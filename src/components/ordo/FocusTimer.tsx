@@ -143,13 +143,13 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
                 {p.label}
               </SegButton>
             ))}
-            <SegButton
-              active={false}
-              className="px-2 py-1.5 text-[11px] sm:py-1"
-              onClick={() => setShowAdd(!showAdd)}
-            >
-              <Plus className="mr-0.5 size-3 inline" /> Add
-            </SegButton>
+              <SegButton
+                active={false}
+                className="px-2 py-1.5 text-[11px] sm:py-1"
+                onClick={() => setShowAdd(!showAdd)}
+              >
+                <Plus className="mr-0.5 size-3 inline" /> Customize
+              </SegButton>
           </ScrollRow>
         }
       />
