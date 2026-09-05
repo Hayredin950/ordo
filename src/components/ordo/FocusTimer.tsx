@@ -124,49 +124,45 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
 
   return (
     <Panel>
-      <PanelTitle
-        title="Focus timer"
-        action={
-          <ScrollRow className="sm:justify-end">
-            {PRESETS.map((p) => (
-              <SegButton
-                key={p.id}
-                active={total === p.minutes * 60}
-                className="px-2.5 py-1.5 text-[11px] sm:py-1"
-                onClick={() => select(p.minutes)}
-              >
-                {p.label}
-              </SegButton>
-            ))}
-            {customPresets.map((p) => (
-              <span key={p.id} className="inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-1 text-[11px]">
-                <SegButton
-                  active={total === p.minutes * 60}
-                  className="px-2 py-1.5 text-[11px] sm:py-1"
-                  onClick={() => select(p.minutes)}
-                >
-                  {p.label}
-                </SegButton>
-                <button
-                  type="button"
-                  onClick={() => removePreset(p.id)}
-                  className="ml-0.5 rounded-full hover:bg-accent hover:text-foreground"
-                  aria-label={`Remove ${p.label} preset`}
-                >
-                  <X className="size-2.5" />
-                </button>
-              </span>
-            ))}
+      <PanelTitle title="Focus timer" />
+      <ScrollRow className="sm:justify-end">
+        {PRESETS.map((p) => (
+          <SegButton
+            key={p.id}
+            active={total === p.minutes * 60}
+            className="px-2.5 py-1.5 text-[11px] sm:py-1"
+            onClick={() => select(p.minutes)}
+          >
+            {p.label}
+          </SegButton>
+        ))}
+        {customPresets.map((p) => (
+          <span key={p.id} className="inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-1 text-[11px]">
             <SegButton
-              active={false}
+              active={total === p.minutes * 60}
               className="px-2 py-1.5 text-[11px] sm:py-1"
-              onClick={() => setShowAdd(!showAdd)}
+              onClick={() => select(p.minutes)}
             >
-              <Plus className="mr-0.5 size-3 inline" /> Customize
+              {p.label}
             </SegButton>
-          </ScrollRow>
-        }
-      />
+            <button
+              type="button"
+              onClick={() => removePreset(p.id)}
+              className="ml-0.5 rounded-full hover:bg-accent hover:text-foreground"
+              aria-label={`Remove ${p.label} preset`}
+            >
+              <X className="size-2.5" />
+            </button>
+          </span>
+        ))}
+        <SegButton
+          active={false}
+          className="px-2 py-1.5 text-[11px] sm:py-1"
+          onClick={() => setShowAdd(!showAdd)}
+        >
+          <Plus className="mr-0.5 size-3 inline" /> Customize
+        </SegButton>
+      </ScrollRow>
       {showAdd && (
         <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center">
           <input
