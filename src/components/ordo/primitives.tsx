@@ -34,7 +34,7 @@ export function PanelTitle({
         <h2 className="font-display text-base font-semibold sm:text-lg">{title}</h2>
         {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       </div>
-      {action ? <div className="flex shrink-0 justify-end sm:block">{action}</div> : null}
+      {action ? <div className="flex shrink-0 justify-end sm:block max-w-full overflow-hidden">{action}</div> : null}
     </div>
   );
 }
@@ -156,7 +156,7 @@ export function ScrollRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("scroll-row gap-1 pb-1 sm:flex-wrap sm:overflow-visible", className)}>
+    <div className={cn("scroll-row gap-1 pb-1 flex-wrap max-w-full overflow-x-hidden sm:flex-nowrap sm:overflow-x-auto", className)}>
       {children}
     </div>
   );
