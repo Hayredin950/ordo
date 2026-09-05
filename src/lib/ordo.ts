@@ -12,9 +12,10 @@ export type HourFormat = "24h" | "12h";
 
 export type Settings = {
   hourFormat: HourFormat;
+  soundEnabled: boolean;
 };
 
-export const DEFAULT_SETTINGS: Settings = { hourFormat: "24h" };
+export const DEFAULT_SETTINGS: Settings = { hourFormat: "24h", soundEnabled: true };
 
 /**
  * First-run guess from the browser's own locale, so an en-US visitor sees

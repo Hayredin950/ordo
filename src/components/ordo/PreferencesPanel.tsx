@@ -7,7 +7,7 @@ import {
   type OrdoState,
 } from "@/lib/ordo";
 import { Panel, PanelTitle, SegButton } from "./primitives";
-import { Clock } from "lucide-react";
+import { Clock, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 
 const OPTIONS: { id: HourFormat; label: string; hint: string }[] = [
@@ -15,14 +15,6 @@ const OPTIONS: { id: HourFormat; label: string; hint: string }[] = [
   { id: "12h", label: "12-hour", hint: "9:00 AM – 5:30 PM" },
 ];
 
-/**
- * The clock-format choice. It lives in the synced document, so it follows the
- * account to every device rather than sitting in this browser's storage.
- *
- * Note about `<input type="time">`: the block editors in Routine are rendered by
- * the browser from the operating system's locale, so this preference cannot reach
- * them. Everywhere the app prints a time itself, it obeys.
- */
 export function PreferencesPanel({
   state,
   update,
@@ -31,11 +23,10 @@ export function PreferencesPanel({
   update: (fn: (s: OrdoState) => OrdoState) => void;
 }) {
   const format = hourFormatOf(state);
-  // A real block from the plan makes the preview concrete; the fallback keeps
-  // the panel meaningful on a day with nothing scheduled.
   const sample = blocksFor(state, new Date())[0];
   const start = sample?.start ?? "09:00";
   const end = sample?.end ?? "10:30";
+  const soundEnabled = state.settings.soundEnabled ?? true;
 
   const choose = (next: HourFormat) => {
     if (next === format) return;
@@ -44,6 +35,14 @@ export function PreferencesPanel({
       settings: { ...DEFAULT_SETTINGS, ...prev.settings, hourFormat: next },
     }));
     toast.success(next === "24h" ? "Times now show as 24-hour" : "Times now show as AM/PM");
+  };
+
+  const toggleSound = () => {
+    update((prev) => ({
+      ...prev,
+      settings: { ...DEFAULT_SETTINGS, ...prev.settings, soundEnabled: !soundEnabled },
+    }));
+    toast.success(soundEnabled ? "Alarm sounds off" : "Alarm sounds on");
   };
 
   return (
@@ -77,6 +76,30 @@ export function PreferencesPanel({
               {sample ? `“${sample.title}” today` : "Example block"}
             </p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-background/40 p-3">
+          {soundEnabled ? (
+            <Volume2 className="size-4 shrink-0 text-primary" />
+          ) : (
+            <VolumeX className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          <div className="min-w-0">
+            <p className="truncate font-display text-sm font-semibold">
+              Focus timer alarm
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {soundEnabled ? "Beep on session end" : "Silent"}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="ml-auto tap rounded-lg px-3 py-1 text-xs font-medium border border-border hover:bg-muted"
+            onClick={() => void toggleSound()}
+            aria-label={soundEnabled ? "Turn off alarm" : "Turn on alarm"}
+          >
+            {soundEnabled ? "On" : "Off"}
+          </button>
         </div>
 
         <p className="text-xs text-muted-foreground">

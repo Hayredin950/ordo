@@ -84,18 +84,30 @@ export async function loadHistory(): Promise<OrdoState[]> {
 // ---- Accountability pairing -----------------------------------------------
 
 export async function listPeers(): Promise<Peer[]> {
-  const { data, error } = await sb().rpc("peer_progress");
+  const { data, error } = await sb().rpc("get_accountability_partners");
   if (error) throw dbError(error, "Could not load your partners");
   return (data ?? []) as Peer[];
 }
 
-export async function pairWithEmail(email: string): Promise<void> {
-  const { error } = await sb().rpc("pair_with_email", { p_email: email });
+export async function pairWithEmail(email: string): Promise<string> {
+  const { data, error } = await sb().rpc("pair_with_email", { p_email: email });
   if (error) throw dbError(error, "Could not add that partner");
+  return data as string;
 }
 
-export async function unpair(peerId: string): Promise<void> {
-  const { error } = await sb().rpc("unpair", { p_peer: peerId });
+export async function respondToPairingRequest(
+  requestId: string,
+  response: "accept" | "decline",
+): Promise<void> {
+  const { error } = await sb().rpc("respond_to_pairing_request", {
+    p_request_id: requestId,
+    p_response: response,
+  });
+  if (error) throw dbError(error, "Could not respond to request");
+}
+
+export async function unpairUser(peerId: string): Promise<void> {
+  const { error } = await sb().rpc("unpair_user", { p_peer: peerId });
   if (error) throw dbError(error, "Could not remove that partner");
 }
 
@@ -107,8 +119,24 @@ export async function listChallenges(): Promise<Challenge[]> {
   return (data ?? []) as Challenge[];
 }
 
-export async function createChallenge(name: string, days: number): Promise<void> {
-  const { error } = await sb().rpc("create_challenge", { p_name: name, p_days: days });
+export async function createChallenge(
+  name: string,
+  category: string = "general",
+  description: string = "",
+  startAt?: Date,
+  endAt?: Date,
+  visibility: "public" | "private" = "public",
+  maxParticipants?: number,
+): Promise<void> {
+  const { error } = await sb().rpc("create_challenge", {
+    p_name: name,
+    p_category: category,
+    p_description: description,
+    p_start_at: startAt?.toISOString() ?? null,
+    p_end_at: endAt?.toISOString() ?? null,
+    p_visibility: visibility,
+    p_max_participants: maxParticipants ?? null,
+  });
   if (error) throw dbError(error, "Could not create the challenge");
 }
 
@@ -117,15 +145,29 @@ export async function joinChallenge(id: string): Promise<void> {
   if (error) throw dbError(error, "Could not join the challenge");
 }
 
+export async function leaveChallenge(id: string): Promise<void> {
+  const { error } = await sb().rpc("leave_challenge", { p_challenge: id });
+  if (error) throw dbError(error, "Could not leave the challenge");
+}
+
 export async function challengeLeaderboard(
   id: string,
   meId: string | null,
 ): Promise<{ leaderboard: BoardRow[]; myRank: number | null }> {
-  const { data, error } = await sb().rpc("challenge_leaderboard", { p_challenge: id });
+  const { data, error } = await sb().rpc("get_challenge_leaderboard", { p_challenge: id });
   if (error) throw dbError(error, "Could not load the leaderboard");
   const leaderboard = (data ?? []) as BoardRow[];
   const rank = meId ? leaderboard.findIndex((r) => r.user_id === meId) + 1 : 0;
   return { leaderboard, myRank: rank || null };
+}
+
+export async function challengeScore(
+  userId: string,
+  challengeId: string,
+): Promise<number | null> {
+  const { data, error } = await sb().rpc("challenge_score", { p_user: userId, p_challenge: challengeId });
+  if (error) throw dbError(error, "Could not load challenge score");
+  return (data as number | null) ?? null;
 }
 
 // ---- Future-self letters ----------------------------------------------------
