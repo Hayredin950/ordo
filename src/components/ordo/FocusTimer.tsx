@@ -141,6 +141,25 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
                 {p.label}
               </SegButton>
             ))}
+            {customPresets.map((p) => (
+              <span key={p.id} className="inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-1 text-[11px]">
+                <SegButton
+                  active={total === p.minutes * 60}
+                  className="px-2 py-1.5 text-[11px] sm:py-1"
+                  onClick={() => select(p.minutes)}
+                >
+                  {p.label}
+                </SegButton>
+                <button
+                  type="button"
+                  onClick={() => removePreset(p.id)}
+                  className="ml-0.5 rounded-full hover:bg-accent hover:text-foreground"
+                  aria-label={`Remove ${p.label} preset`}
+                >
+                  <X className="size-2.5" />
+                </button>
+              </span>
+            ))}
             <SegButton
               active={false}
               className="px-2 py-1.5 text-[11px] sm:py-1"
@@ -175,23 +194,6 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
             <X className="size-3" />
           </Button>
         </div>
-      )}
-      {customPresets.length > 0 && (
-        <ScrollRow className="sm:hidden">
-          {customPresets.map((p) => (
-            <span key={p.id} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
-              {p.label}
-              <button
-                type="button"
-                onClick={() => removePreset(p.id)}
-                className="ml-0.5 rounded-full hover:bg-accent hover:text-foreground"
-                aria-label={`Remove ${p.label} preset`}
-              >
-                <X className="size-2.5" />
-              </button>
-            </span>
-          ))}
-        </ScrollRow>
       )}
       <div className="flex flex-col items-center gap-3 py-2">
         <div className="relative flex size-32 items-center justify-center sm:size-36">
