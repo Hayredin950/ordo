@@ -31,10 +31,10 @@ export function PanelTitle({
       )}
     >
       <div className="min-w-0">
-        <h2 className="font-display text-base font-semibold sm:text-lg">{title}</h2>
-        {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+<h2 className="font-display text-base font-semibold sm:text-lg">{title}</h2>
+                {hint ? <p className="mt-1 px-2 text-xs text-muted-foreground">{hint}</p> : null}
       </div>
-      {action ? <div className="flex shrink-0 justify-end sm:block max-w-full overflow-hidden">{action}</div> : null}
+      {action ? <div className="flex w-full shrink-0 justify-end sm:w-auto sm:block max-w-full overflow-hidden">{action}</div> : null}
     </div>
   );
 }
