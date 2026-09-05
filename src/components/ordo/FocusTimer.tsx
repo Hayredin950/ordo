@@ -62,7 +62,6 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
   const [running, setRunning] = useState(false);
   const [customPresets, setCustomPresets] = useState<TimerPreset[]>(loadCustomPresets);
   const [showAdd, setShowAdd] = useState(false);
-  const [newLabel, setNewLabel] = useState("");
   const [newMinutes, setNewMinutes] = useState("25");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const soundEnabled = state?.settings?.soundEnabled ?? true;
@@ -100,12 +99,11 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
 
   const addPreset = () => {
     const minutes = parseInt(newMinutes, 10);
-    if (!newLabel.trim() || isNaN(minutes) || minutes <= 0) return;
-    const preset: TimerPreset = { id: uid(), label: newLabel.trim(), minutes };
+    if (isNaN(minutes) || minutes <= 0) return;
+    const preset: TimerPreset = { id: uid(), label: `Custom ${customPresets.length + 1}`, minutes };
     const updated = [...customPresets, preset];
     setCustomPresets(updated);
     saveCustomPresets(updated);
-    setNewLabel("");
     setNewMinutes("25");
     setShowAdd(false);
   };
@@ -172,13 +170,6 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
       />
       {showAdd && (
         <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center">
-          <input
-            type="text"
-            placeholder="Label"
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring sm:w-32"
-          />
           <input
             type="number"
             placeholder="Minutes"
