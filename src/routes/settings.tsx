@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { DEFAULT_SETTINGS, settingsOf } from "@/lib/ordo";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
+import { useAuth } from "@/lib/auth-context";
+import * as db from "@/lib/db";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -22,7 +24,9 @@ import {
   ChevronRight,
   Clock,
   Info,
+  LogOut,
   RotateCcw,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,12 +43,17 @@ export const Route = createFileRoute("/settings")({
 
 /**
  * The web twin of the Flutter app's `SettingsScreen` — same four sections, same
- * tiles, same order. It reads and writes the same synced settings the header's
- * clock shortcut and the Community → Preferences panel do.
+ * tiles, same order — plus the account controls that used to sit in a "Settings
+ * & data" panel at the bottom of the Community tab, which is a strange place to
+ * keep a delete button. It reads and writes the same synced settings the
+ * header's clock shortcut and the Community → Preferences panel do.
  */
 function SettingsPage() {
   const { state, update, reset } = useOrdoCloud();
+  const { user, logout } = useAuth();
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (!state) return <div className="min-h-dvh" aria-busy="true" />;
 
@@ -65,6 +74,19 @@ function SettingsPage() {
       settings: { ...DEFAULT_SETTINGS, ...prev.settings, soundEnabled: !soundEnabled },
     }));
     toast.success(soundEnabled ? "Alarm sounds off" : "Alarm sounds on");
+  };
+
+  const deleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await db.deleteAccount();
+      toast.success("Account and all data deleted.");
+      await logout();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete account");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -103,7 +125,10 @@ function SettingsPage() {
             />
           </Section>
 
-          <Section title="Data">
+          <Section
+            title="Data"
+            hint="Everything is exportable (JSON, CSV, iCal) from the profile menu. Version history keeps the last 30 snapshots — Undo steps back through them."
+          >
             <SettingsTile
               icon={RotateCcw}
               title="Reset All Data"
@@ -111,7 +136,28 @@ function SettingsPage() {
               onClick={() => setConfirmReset(true)}
               destructive
             />
+            {user ? (
+              <SettingsTile
+                icon={Trash2}
+                title="Delete Account"
+                subtitle="Removes your account, sync state, pairings, letters and memberships"
+                onClick={() => setConfirmDelete(true)}
+                disabled={deleting}
+                destructive
+              />
+            ) : null}
           </Section>
+
+          {user ? (
+            <Section title="Account" hint={user.email}>
+              <SettingsTile
+                icon={LogOut}
+                title="Sign Out"
+                subtitle="Your data stays synced to your other devices"
+                onClick={() => void logout()}
+              />
+            </Section>
+          ) : null}
 
           <Section title="About">
             <SettingsTile icon={Info} title="Ordo" subtitle="Personal Accountability App" />
@@ -142,14 +188,38 @@ function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your Ordo account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All synced data is wiped from the server. Export anything you want to keep first. This
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="tap">Keep my account</AlertDialogCancel>
+            <AlertDialogAction
+              className="tap bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => void deleteAccount()}
+            >
+              Delete forever
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="font-display text-sm font-semibold text-primary">{title}</h2>
+      <div>
+        <h2 className="font-display text-sm font-semibold text-primary">{title}</h2>
+        {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      </div>
       {children}
     </section>
   );
@@ -165,12 +235,14 @@ function SettingsTile({
   title,
   subtitle,
   onClick,
+  disabled = false,
   destructive = false,
 }: {
   icon: LucideIcon;
   title: string;
   subtitle: string;
   onClick?: () => void;
+  disabled?: boolean;
   destructive?: boolean;
 }) {
   const body = (
@@ -202,7 +274,12 @@ function SettingsTile({
     <button
       type="button"
       onClick={onClick}
-      className={cn(shell, "tap text-left transition-colors hover:bg-accent/40")}
+      disabled={disabled}
+      className={cn(
+        shell,
+        "tap text-left transition-colors hover:bg-accent/40",
+        disabled && "pointer-events-none opacity-50",
+      )}
     >
       {body}
     </button>

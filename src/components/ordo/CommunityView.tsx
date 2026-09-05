@@ -7,17 +7,6 @@ import { Panel, PanelTitle } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
   UserPlus,
   Users,
   Trophy,
@@ -29,12 +18,11 @@ import {
   Check,
   X,
   MailWarning,
-  LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
 
 export function CommunityView() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   // ---- Accountability pairing ----
   const [peers, setPeers] = useState<Peer[] | null>(null);
@@ -188,22 +176,6 @@ export function CommunityView() {
       setBoard(null);
     } finally {
       setBoardBusy(false);
-    }
-  };
-
-  // ---- Settings / danger zone ----
-  const [deleting, setDeleting] = useState(false);
-
-  const deleteAccount = async () => {
-    setDeleting(true);
-    try {
-      await db.deleteAccount();
-      toast.success("Account and all data deleted.");
-      await logout();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not delete account");
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -449,71 +421,6 @@ export function CommunityView() {
               </div>
             ))
           )}
-        </div>
-      </Panel>
-
-      <Panel>
-        <PanelTitle title="Settings & data" hint="Your data, your rules — GDPR-style controls." />
-        <div className="space-y-4 text-sm">
-          <div>
-            <p className="font-medium">Data & privacy</p>
-            <p className="mt-1 text-muted-foreground">
-              Everything is exportable (JSON, CSV, iCal) from the header. Version history keeps the
-              last 30 snapshots — use the Undo button in the header to step back.
-            </p>
-          </div>
-          <div className="rounded-lg border border-destructive/40 p-3 sm:p-4">
-            <p className="font-medium text-destructive">Delete account</p>
-            <p className="mt-1 text-muted-foreground">
-              Permanently removes your account, sync state, pairings, letters and memberships. This
-              cannot be undone.
-            </p>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="tap mt-3 w-full sm:w-auto"
-                  disabled={deleting}
-                >
-                  {deleting ? <Loader2 className="mr-1 size-4 animate-spin" /> : null} Delete my
-                  account
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete your Ordo account?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    All synced data is wiped from the server. Export anything you want to keep
-                    first. This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel className="tap">Keep my account</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="tap bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    onClick={() => void deleteAccount()}
-                  >
-                    Delete forever
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-          <div className="rounded-lg border border-border p-3 sm:p-4">
-            <p className="font-medium">Sign out</p>
-            <p className="mt-1 text-muted-foreground">
-              Sign out of this device. Your data stays synced to other devices.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="tap mt-3 w-full sm:w-auto"
-              onClick={() => void logout()}
-            >
-              <LogOut className="mr-1 size-4" /> Sign out
-            </Button>
-          </div>
         </div>
       </Panel>
     </div>
