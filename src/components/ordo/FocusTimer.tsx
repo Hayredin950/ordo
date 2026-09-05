@@ -116,8 +116,6 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
     saveCustomPresets(updated);
   };
 
-  const allPresets = [...PRESETS, ...customPresets];
-
   const mm = Math.floor(secondsLeft / 60)
     .toString()
     .padStart(2, "0");
@@ -133,7 +131,7 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
         hint="One block at a time — the timer is the task."
         action={
           <ScrollRow className="sm:justify-end">
-            {allPresets.map((p) => (
+            {PRESETS.map((p) => (
               <SegButton
                 key={p.id}
                 active={total === p.minutes * 60}
@@ -143,13 +141,13 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
                 {p.label}
               </SegButton>
             ))}
-              <SegButton
-                active={false}
-                className="px-2 py-1.5 text-[11px] sm:py-1"
-                onClick={() => setShowAdd(!showAdd)}
-              >
-                <Plus className="mr-0.5 size-3 inline" /> Customize
-              </SegButton>
+            <SegButton
+              active={false}
+              className="px-2 py-1.5 text-[11px] sm:py-1"
+              onClick={() => setShowAdd(!showAdd)}
+            >
+              <Plus className="mr-0.5 size-3 inline" /> Customize
+            </SegButton>
           </ScrollRow>
         }
       />
