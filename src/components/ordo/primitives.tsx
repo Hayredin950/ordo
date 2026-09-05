@@ -156,7 +156,7 @@ export function ScrollRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("scroll-row gap-1 pb-1 flex-wrap max-w-full overflow-x-hidden sm:flex-nowrap sm:overflow-x-auto", className)}>
+    <div className={cn("scroll-row gap-1 pb-1 max-w-full overflow-x-auto sm:flex-nowrap sm:overflow-x-auto", className)}>
       {children}
     </div>
   );
