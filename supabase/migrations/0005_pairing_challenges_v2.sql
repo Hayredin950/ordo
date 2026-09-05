@@ -28,9 +28,8 @@ alter table public.pairings
   drop constraint if exists pairings_pkey,
   add primary key (id);
 
-alter table public.pairings
-  add constraint pairings_symmetric_unique
-    unique (least(user_a, user_b), greatest(user_a, user_b));
+create unique index if not exists pairings_symmetric_unique_idx
+  on public.pairings (least(user_a, user_b), greatest(user_a, user_b));
 
 -- ---------------------------------------------------------------------------
 -- 3. Challenges — extended fields
@@ -47,8 +46,8 @@ alter table public.challenges
   add column if not exists updated_at timestamptz not null default now();
 
 alter table public.challenges
-  alter column starts_on type timestamptz using starts_at::timestamptz,
-  alter column ends_on type timestamptz using ends_at::timestamptz;
+  alter column starts_on type timestamptz using starts_on::timestamptz,
+  alter column ends_on type timestamptz using ends_on::timestamptz;
 
 -- ---------------------------------------------------------------------------
 -- 4. Challenge members — new table with tracking fields
@@ -98,44 +97,52 @@ create or replace function public.completion_pct(
   p_end_at timestamptz
 )
 returns numeric
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
-  with blocks as (
-    select jsonb_array_elements(
-      coalesce(
-        (select state -> 'routine' from public.user_state where user_id = p_user)
-        -> (extract(dow from generate_series(p_start_at::date, p_end_at::date, '1 day'::interval))::integer::text),
-        '[]'::jsonb
-      )
-    ) as blk
-  ),
-  entries as (
-    select
-      b.blk ->> 'id' as block_id,
-      coalesce(
-        (select value from jsonb_each(
-          coalesce(
-            (select state -> 'log' from public.user_state where user_id = p_user)
-            -> to_char(d, 'YYYY-MM-DD'),
-            '{}'::jsonb
-          )
-        ) where key = b.blk ->> 'id'),
-        '0'
-      )::numeric as pct,
-      d
-    from generate_series(p_start_at::date, p_end_at::date, '1 day'::interval) as d
-    cross join blocks b
-  )
-  select coalesce(round(avg(pct)), 0) from entries;
+declare
+  v_state jsonb;
+  v_sum numeric := 0;
+  v_count integer := 0;
+  v_day date;
+  v_dow text;
+  v_blocks jsonb;
+  v_log jsonb;
+  v_total numeric;
+  v_block_count integer;
+begin
+  select state into v_state from public.user_state where user_id = p_user;
+  if v_state is null or v_state -> 'routine' is null then
+    return 0;
+  end if;
+
+  for v_day in select d::date from generate_series(p_start_at::date, p_end_at::date, '1 day'::interval) as d
+  loop
+    v_dow := extract(dow from v_day)::integer::text;
+    v_blocks := coalesce(v_state -> 'routine' -> v_dow, '[]'::jsonb);
+    v_block_count := jsonb_array_length(v_blocks);
+    if v_block_count = 0 then
+      continue;
+    end if;
+    v_log := coalesce(v_state -> 'log' -> to_char(v_day, 'YYYY-MM-DD'), '{}'::jsonb);
+    select coalesce(sum(coalesce((v_log ->> (b ->> 'id'))::numeric, 0)), 0)
+      into v_total
+      from jsonb_array_elements(v_blocks) as b;
+    v_sum := v_sum + v_total / v_block_count;
+    v_count := v_count + 1;
+  end loop;
+
+  return coalesce(round(v_sum / nullif(v_count, 0)), 0);
+end;
 $$;
 
 -- ---------------------------------------------------------------------------
 -- 7. Pairing RPCs
 -- ---------------------------------------------------------------------------
-create or replace function public.pair_with_email(p_email text)
+drop function if exists public.pair_with_email(text);
+create function public.pair_with_email(p_email text)
 returns uuid
 language plpgsql
 security definer
@@ -213,6 +220,8 @@ begin
 end;
 $$;
 
+drop function if exists public.unpair(uuid);
+
 create or replace function public.get_accountability_partners()
 returns table (id uuid, name text, email text, weekly integer)
 language sql
@@ -230,6 +239,8 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 8. Challenge RPCs (enhanced)
 -- ---------------------------------------------------------------------------
+drop function if exists public.challenge_leaderboard(uuid);
+drop function if exists public.create_challenge(text, integer);
 create or replace function public.create_challenge(
   p_name text,
   p_category text default 'general',

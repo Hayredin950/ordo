@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,8 +25,8 @@ import {
   FileSpreadsheet,
   LogIn,
   LogOut,
-  MoreVertical,
   RotateCcw,
+  Settings as SettingsIcon,
   Shield,
   Sparkles,
   Target,
@@ -89,9 +90,10 @@ function WeekScore({ value }: { value: number }) {
 }
 
 /**
- * Everything that used to be six separate header controls. Undo and Reset stay
- * as icon buttons on a wide screen, so they are hidden from the menu there
- * rather than listed twice.
+ * The profile menu — the web half of the Flutter app's `AccountMenuButton`, with
+ * the same items in the same order, hanging off the same avatar trigger. Undo,
+ * Redo and Reset stay as icon buttons on a wide screen, so they are hidden from
+ * the menu there rather than listed twice.
  */
 function AccountMenu({
   undoBusy,
@@ -116,16 +118,30 @@ function AccountMenu({
   const { user, isAdmin, logout } = useAuth();
   if (!user) return null;
 
+  const accountName = user.name || user.email;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="tap" aria-label="Account, data and export">
-          <MoreVertical className="size-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="tap rounded-full"
+          aria-label={`Profile menu for ${accountName}`}
+        >
+          {/* The photo when the provider gave us one, the initial when it did
+              not — the Flutter menu only ever has the initial to work with. */}
+          <Avatar className="size-7">
+            <AvatarImage src={user.avatar_url || undefined} alt="" />
+            <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
+              {accountName.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="font-normal">
-          <p className="truncate text-sm font-medium">{user.name || user.email}</p>
+          <p className="truncate text-sm font-medium">{accountName}</p>
           <p className="truncate text-xs text-muted-foreground">signed in with {user.provider}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -139,12 +155,26 @@ function AccountMenu({
             <DropdownMenuSeparator className="lg:hidden" />
           </>
         ) : null}
-        {/* The full control lives in Community → Preferences; this is the shortcut
-            for the one setting people flip while looking at a schedule. */}
+        <DropdownMenuItem asChild>
+          <Link to="/settings">
+            <SettingsIcon /> Settings
+          </Link>
+        </DropdownMenuItem>
+        {/* The full control lives on the Settings page; this is the shortcut for
+            the one setting people flip while looking at a schedule. */}
         <DropdownMenuItem onSelect={() => onHourFormat(hourFormat === "24h" ? "12h" : "24h")}>
           <Clock /> {hourFormat === "24h" ? "Switch to 12-hour (AM/PM)" : "Switch to 24-hour"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuLabel className="py-1 text-[11px] font-semibold text-muted-foreground">
+          Export
+        </DropdownMenuLabel>
+        {EXPORTS.map(({ kind, label, Icon }) => (
+          <DropdownMenuItem key={kind} onSelect={() => onExport(kind)}>
+            <Icon /> {label}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator className="lg:hidden" />
         <DropdownMenuItem className="lg:hidden" disabled={undoBusy} onSelect={onUndo}>
           <Undo2 /> Undo last change
         </DropdownMenuItem>
@@ -154,12 +184,6 @@ function AccountMenu({
         <DropdownMenuItem className="lg:hidden" onSelect={onReset}>
           <RotateCcw /> Reset my data
         </DropdownMenuItem>
-        <DropdownMenuSeparator className="lg:hidden" />
-        {EXPORTS.map(({ kind, label, Icon }) => (
-          <DropdownMenuItem key={kind} onSelect={() => onExport(kind)}>
-            <Icon /> {label}
-          </DropdownMenuItem>
-        ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void logout()}>
           <LogOut /> Sign out

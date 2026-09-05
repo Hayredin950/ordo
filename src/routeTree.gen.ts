@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiCoachCatchupRouteImport } from './routes/api/coach/catchup'
 import { Route as ApiCoachWeeklyRouteImport } from './routes/api/coach/weekly'
@@ -31,6 +32,11 @@ const AdminRoute = AdminRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/settings': typeof SettingsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/coach/catchup': typeof ApiCoachCatchupRoute
   '/api/coach/weekly': typeof ApiCoachWeeklyRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/settings': typeof SettingsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/coach/catchup': typeof ApiCoachCatchupRoute
   '/api/coach/weekly': typeof ApiCoachWeeklyRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/settings': typeof SettingsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/coach/catchup': typeof ApiCoachCatchupRoute
   '/api/coach/weekly': typeof ApiCoachWeeklyRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/login'
+    | '/settings'
     | '/api/health'
     | '/api/coach/catchup'
     | '/api/coach/weekly'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/login'
+    | '/settings'
     | '/api/health'
     | '/api/coach/catchup'
     | '/api/coach/weekly'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/login'
+    | '/settings'
     | '/api/health'
     | '/api/coach/catchup'
     | '/api/coach/weekly'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   LoginRoute: typeof LoginRoute
+  SettingsRoute: typeof SettingsRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiCoachCatchupRoute: typeof ApiCoachCatchupRoute
   ApiCoachWeeklyRoute: typeof ApiCoachWeeklyRoute
@@ -155,6 +168,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -199,6 +219,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   LoginRoute: LoginRoute,
+  SettingsRoute: SettingsRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiCoachCatchupRoute: ApiCoachCatchupRoute,
   ApiCoachWeeklyRoute: ApiCoachWeeklyRoute,
