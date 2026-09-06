@@ -9,19 +9,94 @@ import { dbError, sb } from "./supabase";
 import type { Block, OrdoState } from "./ordo";
 import type { CategoryRow } from "./categories";
 
-export type Peer = { id: string; name: string; email: string; weekly: number | null };
-
-export type Challenge = {
+export type Peer = {
   id: string;
   name: string;
-  starts_on: string;
-  ends_on: string;
-  owner_id: string;
-  members: number;
-  joined: boolean;
+  email: string;
+  weekly: number | null;
+  paired_at: string;
 };
 
-export type BoardRow = { user_id: string; name: string; score: number };
+/** A pending invite, in either direction. `peer_id` is null until they sign up. */
+export type PairingRequest = {
+  id: string;
+  direction: "incoming" | "outgoing";
+  peer_id: string | null;
+  peer_name: string | null;
+  peer_email: string;
+  created_at: string;
+  expires_at: string;
+};
+
+export type ChallengeStatus = "upcoming" | "active" | "completed" | "cancelled";
+
+/**
+ * What every challenge read returns. `status` is derived from the dates on each
+ * read rather than stored: 0005 wrote 'upcoming' at creation and had nothing to
+ * promote it, while join_challenge demanded 'active', so nothing was joinable.
+ * `invite_code` is null unless you are the owner or already a member — the code
+ * is a capability, not a description.
+ */
+export type ChallengeBase = {
+  id: string;
+  owner_id: string;
+  name: string;
+  category: string;
+  description: string;
+  start_at: string;
+  end_at: string;
+  status: ChallengeStatus;
+  visibility: "public" | "private";
+  min_daily_minutes: number;
+  max_participants: number | null;
+  members: number;
+  joined: boolean;
+  is_owner: boolean;
+  invite_code: string | null;
+};
+
+/** `list_challenges` adds progress; `get_challenge` returns the base only. */
+export type Challenge = ChallengeBase & {
+  /** 1-based day of the run, clamped to [0, total_days]. */
+  day_index: number;
+  total_days: number;
+  /** Null until you have joined and the window has opened. */
+  my_score: number | null;
+};
+
+/**
+ * `rank` is the server's — ties share it, so it is not the array index. 0005
+ * declared it `integer` while returning `rank()`'s bigint, which made the whole
+ * call raise 42804; the client compensated by recomputing rank from position and
+ * silently disagreed with the database whenever two people tied.
+ */
+export type BoardRow = {
+  user_id: string;
+  name: string;
+  score: number;
+  rank: number;
+  is_me: boolean;
+  has_left: boolean;
+  is_final: boolean;
+  total_members: number;
+};
+
+/**
+ * Why a score is what it is — the caller's own components only. The three
+ * percentages are null while the window has no days in it yet (a challenge that
+ * starts tomorrow), because a 0 there would read as "you failed" rather than
+ * "nothing has happened".
+ */
+export type ChallengeBreakdown = {
+  window_days: number;
+  active_days: number;
+  completion: number | null;
+  consistency: number | null;
+  participation: number | null;
+  score: number | null;
+  is_final: boolean;
+  final_rank: number | null;
+};
 
 export type FutureLetter = {
   id: string;
@@ -95,6 +170,17 @@ export async function pairWithEmail(email: string): Promise<string> {
   return data as string;
 }
 
+/**
+ * Both directions in one call. The inbox used to be a direct read of
+ * `pairing_requests`, which had no RLS in 0005 and selected a `requester_email`
+ * column that does not exist — so the pending list rendered blank rows.
+ */
+export async function listPairingRequests(): Promise<PairingRequest[]> {
+  const { data, error } = await sb().rpc("list_pairing_requests");
+  if (error) throw dbError(error, "Could not load pairing requests");
+  return (data ?? []) as PairingRequest[];
+}
+
 export async function respondToPairingRequest(
   requestId: string,
   response: "accept" | "decline",
@@ -104,6 +190,11 @@ export async function respondToPairingRequest(
     p_response: response,
   });
   if (error) throw dbError(error, "Could not respond to request");
+}
+
+export async function cancelPairingRequest(requestId: string): Promise<void> {
+  const { error } = await sb().rpc("cancel_pairing_request", { p_request_id: requestId });
+  if (error) throw dbError(error, "Could not withdraw that request");
 }
 
 export async function unpairUser(peerId: string): Promise<void> {
@@ -119,23 +210,34 @@ export async function listChallenges(): Promise<Challenge[]> {
   return (data ?? []) as Challenge[];
 }
 
-export async function createChallenge(
-  name: string,
-  category: string = "general",
-  description: string = "",
-  startAt?: Date,
-  endAt?: Date,
-  visibility: "public" | "private" = "public",
-  maxParticipants?: number,
-): Promise<void> {
+export async function getChallenge(id: string): Promise<ChallengeBase | null> {
+  const { data, error } = await sb().rpc("get_challenge", { p_challenge: id });
+  if (error) throw dbError(error, "Could not load the challenge");
+  const rows = (data ?? []) as ChallengeBase[];
+  return rows[0] ?? null;
+}
+
+export async function createChallenge(input: {
+  name: string;
+  category?: string;
+  description?: string;
+  startAt?: Date;
+  endAt?: Date;
+  visibility?: "public" | "private";
+  maxParticipants?: number | null;
+  minDailyMinutes?: number;
+}): Promise<void> {
   const { error } = await sb().rpc("create_challenge", {
-    p_name: name,
-    p_category: category,
-    p_description: description,
-    p_start_at: startAt?.toISOString() ?? null,
-    p_end_at: endAt?.toISOString() ?? null,
-    p_visibility: visibility,
-    p_max_participants: maxParticipants ?? null,
+    p_name: input.name,
+    p_category: input.category ?? "general",
+    p_description: input.description ?? "",
+    // Null means "decide server-side": the dates are validated against each
+    // other there, and the 30-day default lives in one place.
+    p_start_at: input.startAt?.toISOString() ?? null,
+    p_end_at: input.endAt?.toISOString() ?? null,
+    p_visibility: input.visibility ?? "public",
+    p_max_participants: input.maxParticipants ?? null,
+    p_min_daily_minutes: input.minDailyMinutes ?? 30,
   });
   if (error) throw dbError(error, "Could not create the challenge");
 }
@@ -145,27 +247,49 @@ export async function joinChallenge(id: string): Promise<void> {
   if (error) throw dbError(error, "Could not join the challenge");
 }
 
+/** Returns the challenge that was joined, so the caller can open it. */
+export async function joinChallengeByCode(code: string): Promise<string> {
+  const { data, error } = await sb().rpc("join_challenge_by_code", { p_code: code });
+  if (error) throw dbError(error, "Could not join with that code");
+  return data as string;
+}
+
 export async function leaveChallenge(id: string): Promise<void> {
   const { error } = await sb().rpc("leave_challenge", { p_challenge: id });
   if (error) throw dbError(error, "Could not leave the challenge");
 }
 
+export async function cancelChallenge(id: string): Promise<void> {
+  const { error } = await sb().rpc("cancel_challenge", { p_challenge: id });
+  if (error) throw dbError(error, "Could not cancel the challenge");
+}
+
 export async function challengeLeaderboard(
   id: string,
-  meId: string | null,
-): Promise<{ leaderboard: BoardRow[]; myRank: number | null }> {
+): Promise<{ leaderboard: BoardRow[]; myRank: number | null; totalMembers: number }> {
   const { data, error } = await sb().rpc("get_challenge_leaderboard", { p_challenge: id });
   if (error) throw dbError(error, "Could not load the leaderboard");
   const leaderboard = (data ?? []) as BoardRow[];
-  const rank = meId ? leaderboard.findIndex((r) => r.user_id === meId) + 1 : 0;
-  return { leaderboard, myRank: rank || null };
+  const me = leaderboard.find((r) => r.is_me);
+  return {
+    leaderboard,
+    myRank: me?.rank ?? null,
+    totalMembers: leaderboard[0]?.total_members ?? leaderboard.length,
+  };
 }
 
-export async function challengeScore(
-  userId: string,
-  challengeId: string,
-): Promise<number | null> {
-  const { data, error } = await sb().rpc("challenge_score", { p_user: userId, p_challenge: challengeId });
+export async function challengeBreakdown(id: string): Promise<ChallengeBreakdown | null> {
+  const { data, error } = await sb().rpc("get_challenge_breakdown", { p_challenge: id });
+  if (error) throw dbError(error, "Could not load your score breakdown");
+  const rows = (data ?? []) as ChallengeBreakdown[];
+  return rows[0] ?? null;
+}
+
+export async function challengeScore(userId: string, challengeId: string): Promise<number | null> {
+  const { data, error } = await sb().rpc("challenge_score", {
+    p_user: userId,
+    p_challenge: challengeId,
+  });
   if (error) throw dbError(error, "Could not load challenge score");
   return (data as number | null) ?? null;
 }

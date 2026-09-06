@@ -27,6 +27,8 @@ export type TickResult = {
   users: number;
   sent: number;
   kinds: Record<string, number>;
+  /** Challenges whose window closed and whose scores were frozen this pass. */
+  finalized: number;
   skipped?: string;
 };
 
@@ -93,6 +95,7 @@ export async function runTick(): Promise<TickResult> {
   const today = new Date(now);
   const kinds: Record<string, number> = {};
   let sent = 0;
+  let finalized = 0;
 
   const send = async (
     target: Target,
@@ -201,5 +204,24 @@ export async function runTick(): Promise<TickResult> {
     console.error("[cron] letter delivery failed", err);
   }
 
-  return { ok: true, users: targets.length, sent, kinds };
+  /**
+   * Freeze the scores of every challenge whose window has closed. Nothing else
+   * writes `final_score`, and a live score keeps drifting as the member logs
+   * later days, so without this pass a finished challenge never gets a result.
+   *
+   * The function is idempotent (it only looks at `finalized_at is null`) and
+   * takes at most 200 challenges per call with `for update skip locked`, so
+   * overlapping ticks cannot double-score and a backlog drains over a few
+   * passes. It needs the service-role key: EXECUTE is revoked from
+   * `authenticated`, because a member must not be able to settle their own run.
+   */
+  try {
+    const { data, error } = await serviceClient().rpc("finalize_challenges");
+    if (error) throw new Error(error.message);
+    finalized = Number(data ?? 0);
+  } catch (err) {
+    console.error("[cron] challenge finalization failed", err);
+  }
+
+  return { ok: true, users: targets.length, sent, kinds, finalized };
 }

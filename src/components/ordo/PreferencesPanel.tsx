@@ -3,6 +3,7 @@ import {
   blocksFor,
   formatTimeRange,
   hourFormatOf,
+  settingsOf,
   type HourFormat,
   type OrdoState,
 } from "@/lib/ordo";
@@ -26,7 +27,10 @@ export function PreferencesPanel({
   const sample = blocksFor(state, new Date())[0];
   const start = sample?.start ?? "09:00";
   const end = sample?.end ?? "10:30";
-  const soundEnabled = state.settings.soundEnabled ?? true;
+  // `settings` is optional: documents written before it existed have none, so
+  // reading the field directly was both a type error and a runtime crash on any
+  // account that predates the setting.
+  const soundEnabled = settingsOf(state).soundEnabled;
 
   const choose = (next: HourFormat) => {
     if (next === format) return;
@@ -85,9 +89,7 @@ export function PreferencesPanel({
             <VolumeX className="size-4 shrink-0 text-muted-foreground" />
           )}
           <div className="min-w-0">
-            <p className="truncate font-display text-sm font-semibold">
-              Focus timer alarm
-            </p>
+            <p className="truncate font-display text-sm font-semibold">Focus timer alarm</p>
             <p className="text-xs text-muted-foreground">
               {soundEnabled ? "Beep on session end" : "Silent"}
             </p>

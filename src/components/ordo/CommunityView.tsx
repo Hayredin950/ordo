@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
-import { sb } from "@/lib/supabase";
-import type { BoardRow, Challenge, Peer } from "@/lib/db";
+import type {
+  BoardRow,
+  Challenge,
+  ChallengeBreakdown,
+  ChallengeStatus,
+  PairingRequest,
+  Peer,
+} from "@/lib/db";
+import { useCategories } from "@/lib/categories";
 import { Panel, PanelTitle } from "./primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   UserPlus,
   Users,
@@ -18,21 +26,42 @@ import {
   Check,
   X,
   MailWarning,
+  Send,
+  Copy,
+  KeyRound,
+  Lock,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const SELECT_CLASS =
+  "h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm sm:h-9";
+
+/** Status is derived server-side from the dates, so these are the only four. */
+const STATUS_STYLE: Record<ChallengeStatus, string> = {
+  active: "bg-primary/10 text-primary",
+  upcoming: "bg-muted text-muted-foreground",
+  completed: "bg-muted text-muted-foreground",
+  cancelled: "bg-destructive/10 text-destructive",
+};
+
+const fmtDay = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+const errMsg = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
+
 export function CommunityView() {
   const { user } = useAuth();
+  const { categories } = useCategories();
 
   // ---- Accountability pairing ----
   const [peers, setPeers] = useState<Peer[] | null>(null);
   const [pairEmail, setPairEmail] = useState("");
   const [pairBusy, setPairBusy] = useState(false);
-  const [pairRequests, setPairRequests] = useState<
-    Array<{ id: string; requester_email: string; status: string }>
-  >([]);
-  const [requestsBusy, setRequestsBusy] = useState(false);
-  const [respondBusy, setRespondBusy] = useState<string | null>(null);
+  const [requests, setRequests] = useState<PairingRequest[]>([]);
+  const [reqBusy, setReqBusy] = useState<string | null>(null);
 
   const loadPeers = useCallback(async () => {
     if (!user) return;
@@ -43,56 +72,62 @@ export function CommunityView() {
     }
   }, [user]);
 
+  /**
+   * Both directions come from one RPC. This used to read `pairing_requests`
+   * directly and select a `requester_email` column that has never existed, so
+   * every pending invite rendered as a blank row; the table is RLS-locked now.
+   */
   const loadRequests = useCallback(async () => {
     if (!user) return;
-    setRequestsBusy(true);
     try {
-      const { data, error } = await sb()
-        .from("pairing_requests")
-        .select("id, requester_id, target_email, status, created_at")
-        .eq("target_email", user.email ?? "")
-        .eq("status", "pending");
-      if (error) throw error;
-      setPairRequests((data ?? []) as typeof pairRequests);
+      setRequests(await db.listPairingRequests());
     } catch {
-      setPairRequests([]);
-    } finally {
-      setRequestsBusy(false);
+      setRequests([]);
     }
   }, [user]);
-
-  useEffect(() => {
-    void loadPeers();
-    void loadRequests();
-  }, [loadPeers, loadRequests]);
 
   const addPair = async () => {
     if (!pairEmail.trim()) return;
     setPairBusy(true);
     try {
       await db.pairWithEmail(pairEmail.trim());
-      toast.success("Pair request sent — they must accept to connect.");
+      // Deliberately the same message whether or not that address has an
+      // account: anything else turns this box into an account-enumeration probe.
+      toast.success("Invite sent — they have to accept before either of you sees anything.");
       setPairEmail("");
-      void loadPeers();
       void loadRequests();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not pair");
+      toast.error(errMsg(err, "Could not send that invite"));
     } finally {
       setPairBusy(false);
     }
   };
 
-  const respondRequest = async (requestId: string, response: "accept" | "decline") => {
-    setRespondBusy(requestId);
+  const respondRequest = async (id: string, response: "accept" | "decline") => {
+    setReqBusy(id);
     try {
-      await db.respondToPairingRequest(requestId, response);
-      toast.success(response === "accept" ? "Pairing accepted!" : "Pairing declined");
-      setPairRequests((ps) => ps.filter((r) => r.id !== requestId));
+      await db.respondToPairingRequest(id, response);
+      toast.success(response === "accept" ? "Paired." : "Invite declined.");
+      setRequests((rs) => rs.filter((r) => r.id !== id));
       void loadPeers();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not respond");
+      toast.error(errMsg(err, "Could not respond"));
+      void loadRequests();
     } finally {
-      setRespondBusy(null);
+      setReqBusy(null);
+    }
+  };
+
+  const withdrawRequest = async (id: string) => {
+    setReqBusy(id);
+    try {
+      await db.cancelPairingRequest(id);
+      setRequests((rs) => rs.filter((r) => r.id !== id));
+      toast.success("Invite withdrawn");
+    } catch (err) {
+      toast.error(errMsg(err, "Could not withdraw that invite"));
+    } finally {
+      setReqBusy(null);
     }
   };
 
@@ -102,7 +137,7 @@ export function CommunityView() {
       setPeers((ps) => (ps ? ps.filter((p) => p.id !== peerId) : ps));
       toast.success("Pairing removed");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not remove pairing");
+      toast.error(errMsg(err, "Could not remove pairing"));
     }
   };
 
@@ -110,8 +145,20 @@ export function CommunityView() {
   const [challenges, setChallenges] = useState<Challenge[] | null>(null);
   const [chName, setChName] = useState("");
   const [chDays, setChDays] = useState(30);
+  const [chFloor, setChFloor] = useState(30);
+  const [chCategory, setChCategory] = useState("general");
+  const [chPrivate, setChPrivate] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [codeBusy, setCodeBusy] = useState(false);
+
   const [openBoard, setOpenBoard] = useState<string | null>(null);
-  const [board, setBoard] = useState<{ rows: BoardRow[]; myRank: number | null } | null>(null);
+  const [board, setBoard] = useState<{
+    rows: BoardRow[];
+    myRank: number | null;
+    totalMembers: number;
+  } | null>(null);
+  const [breakdown, setBreakdown] = useState<ChallengeBreakdown | null>(null);
   const [boardBusy, setBoardBusy] = useState(false);
 
   const loadChallenges = useCallback(async () => {
@@ -124,58 +171,129 @@ export function CommunityView() {
   }, [user]);
 
   useEffect(() => {
+    void loadPeers();
+    void loadRequests();
     void loadChallenges();
-  }, [loadChallenges]);
+  }, [loadPeers, loadRequests, loadChallenges]);
+
+  const loadBoard = useCallback(async (id: string) => {
+    setBoardBusy(true);
+    setBoard(null);
+    setBreakdown(null);
+    try {
+      // The breakdown is the caller's own row and 404s for a non-member, so a
+      // failure there must not blank out the leaderboard beside it.
+      const [rows, mine] = await Promise.all([
+        db.challengeLeaderboard(id),
+        db.challengeBreakdown(id).catch(() => null),
+      ]);
+      setBoard({ rows: rows.leaderboard, myRank: rows.myRank, totalMembers: rows.totalMembers });
+      setBreakdown(mine);
+    } catch {
+      setBoard(null);
+    } finally {
+      setBoardBusy(false);
+    }
+  }, []);
+
+  const toggleBoard = (id: string) => {
+    if (openBoard === id) {
+      setOpenBoard(null);
+      setBoard(null);
+      setBreakdown(null);
+      return;
+    }
+    setOpenBoard(id);
+    void loadBoard(id);
+  };
 
   const createChallenge = async () => {
     if (!chName.trim()) return;
+    setCreateBusy(true);
     try {
-      await db.createChallenge(chName.trim(), "general", "", new Date(), new Date() + 30 * 24 * 60 * 60 * 1000);
-      toast.success("Challenge created — you're the first member.");
+      const startAt = new Date();
+      // `new Date() + n` was string concatenation, so this argument used to
+      // arrive as "Wed Sep 03 …2592000000" and the call died before the server.
+      const endAt = new Date(startAt.getTime() + Math.max(1, chDays) * DAY_MS);
+      await db.createChallenge({
+        name: chName.trim(),
+        category: chCategory,
+        startAt,
+        endAt,
+        visibility: chPrivate ? "private" : "public",
+        minDailyMinutes: chFloor,
+      });
+      toast.success(
+        chPrivate
+          ? "Created. Share the invite code to let people in."
+          : "Created — you are the first member.",
+      );
       setChName("");
       void loadChallenges();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create challenge");
+      toast.error(errMsg(err, "Could not create the challenge"));
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+
+  const joinByCode = async () => {
+    if (!joinCode.trim()) return;
+    setCodeBusy(true);
+    try {
+      const id = await db.joinChallengeByCode(joinCode.trim());
+      toast.success("Joined.");
+      setJoinCode("");
+      await loadChallenges();
+      setOpenBoard(id);
+      void loadBoard(id);
+    } catch (err) {
+      toast.error(errMsg(err, "Could not join with that code"));
+    } finally {
+      setCodeBusy(false);
     }
   };
 
   const joinChallenge = async (id: string) => {
     try {
       await db.joinChallenge(id);
-      toast.success("Joined. Rank is by completion % — opt-in, no pressure.");
-      void loadChallenges();
+      toast.success("Joined. Rank is by score — nobody sees what your days contain.");
+      await loadChallenges();
       setOpenBoard(id);
+      void loadBoard(id);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not join");
+      toast.error(errMsg(err, "Could not join"));
     }
   };
 
   const leaveChallenge = async (id: string) => {
     try {
       await db.leaveChallenge(id);
-      setChallenges((cs) => cs ? cs.map((c) => c.id === id ? { ...c, joined: false } : c) : cs);
-      toast.success("Left the challenge");
+      // Leaving is not an erase: the run stays on the leaderboard, marked.
+      toast.success("Left the challenge — your score so far stays ranked.");
+      await loadChallenges();
+      if (openBoard === id) void loadBoard(id);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not leave");
+      toast.error(errMsg(err, "Could not leave"));
     }
   };
 
-  const toggleBoard = async (id: string) => {
-    if (openBoard === id) {
-      setOpenBoard(null);
-      setBoard(null);
-      return;
-    }
-    setOpenBoard(id);
-    setBoardBusy(true);
-    setBoard(null);
+  const cancelChallenge = async (id: string) => {
     try {
-      const res = await db.challengeLeaderboard(id, user?.id ?? null);
-      setBoard({ rows: res.leaderboard, myRank: res.myRank });
+      await db.cancelChallenge(id);
+      toast.success("Cancelled. It will not be scored.");
+      await loadChallenges();
+    } catch (err) {
+      toast.error(errMsg(err, "Could not cancel"));
+    }
+  };
+
+  const copyCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast.success(`Copied ${code}`);
     } catch {
-      setBoard(null);
-    } finally {
-      setBoardBusy(false);
+      toast.error("Could not copy — the code is shown beside the button.");
     }
   };
 
@@ -189,6 +307,9 @@ export function CommunityView() {
       </Panel>
     );
   }
+
+  const incoming = requests.filter((r) => r.direction === "incoming");
+  const outgoing = requests.filter((r) => r.direction === "outgoing");
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -205,6 +326,9 @@ export function CommunityView() {
             type="email"
             placeholder="friend@example.com"
             onChange={(e) => setPairEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void addPair();
+            }}
           />
           <Button
             size="sm"
@@ -217,22 +341,27 @@ export function CommunityView() {
             ) : (
               <UserPlus className="mr-1 size-4" />
             )}
-            Pair
+            Invite
           </Button>
         </div>
+
         <div className="mt-3 space-y-2">
-          {/* Pairing requests */}
-          {pairRequests.length > 0 && (
+          {incoming.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-foreground">Pending requests</p>
-              {pairRequests.map((r) => (
+              <p className="text-xs font-medium text-foreground">Waiting on you</p>
+              {incoming.map((r) => (
                 <div
                   key={r.id}
                   className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
                 >
                   <MailWarning className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="flex-1">{r.requester_email}</span>
-                  {respondBusy === r.id ? (
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{r.peer_name || r.peer_email}</div>
+                    {r.peer_name ? (
+                      <div className="truncate text-xs text-muted-foreground">{r.peer_email}</div>
+                    ) : null}
+                  </div>
+                  {reqBusy === r.id ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <>
@@ -240,7 +369,7 @@ export function CommunityView() {
                         size="icon"
                         variant="ghost"
                         className="tap"
-                        aria-label="Accept pairing request"
+                        aria-label={`Accept pairing invite from ${r.peer_email}`}
                         onClick={() => void respondRequest(r.id, "accept")}
                       >
                         <Check className="size-4 text-green-600" />
@@ -249,7 +378,7 @@ export function CommunityView() {
                         size="icon"
                         variant="ghost"
                         className="tap"
-                        aria-label="Decline pairing request"
+                        aria-label={`Decline pairing invite from ${r.peer_email}`}
                         onClick={() => void respondRequest(r.id, "decline")}
                       >
                         <X className="size-4 text-red-600" />
@@ -259,167 +388,333 @@ export function CommunityView() {
                 </div>
               ))}
             </div>
-          )}
-          {!peers?.length && pairRequests.length === 0 ? (
+          ) : null}
+
+          {outgoing.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-foreground">Sent</p>
+              {outgoing.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center gap-2 rounded-lg border border-dashed border-border p-3 text-sm"
+                >
+                  <Send className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                    {r.peer_email}
+                  </span>
+                  {reqBusy === r.id ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="tap shrink-0"
+                      onClick={() => void withdrawRequest(r.id)}
+                    >
+                      Withdraw
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {!peers?.length && requests.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No peers yet. Add someone by email — they must have an Ordo account.
+              No partners yet. Invite someone by email — they choose whether to accept.
             </p>
           ) : null}
-          {peers?.length ? (
-            peers.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm sm:gap-3"
-              >
-                <Users className="size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{p.name || p.email}</div>
-                  <div className="truncate text-xs text-muted-foreground">{p.email}</div>
-                </div>
-                <span className="shrink-0 rounded bg-muted px-2 py-1 font-display text-sm font-semibold tabular-nums">
-                  {p.weekly === null ? "—" : `${p.weekly}%`}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="tap -mr-1 shrink-0"
-                  aria-label={`Remove pairing with ${p.email}`}
-                  onClick={() => void removePair(p.id)}
+
+          {peers?.length
+            ? peers.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm sm:gap-3"
                 >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))
-          ) : null}
+                  <Users className="size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{p.name || p.email}</div>
+                    <div className="truncate text-xs text-muted-foreground">{p.email}</div>
+                  </div>
+                  <span className="shrink-0 rounded bg-muted px-2 py-1 font-display text-sm font-semibold tabular-nums">
+                    {p.weekly === null ? "—" : `${p.weekly}%`}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tap -mr-1 shrink-0"
+                    aria-label={`Remove pairing with ${p.email}`}
+                    onClick={() => void removePair(p.id)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))
+            : null}
         </div>
       </Panel>
 
       <Panel>
         <PanelTitle
           title="Challenges"
-          hint="Opt-in 30-day tests of willpower, ranked by completion rate."
+          hint="Score = 70% completion, 20% consistency, 10% participation. Rank is public; your days are not."
         />
-        {/* Name gets its own line on a phone; the day count and the action share
-            the second one because neither needs full width. */}
-        <div className="flex flex-col gap-2 sm:flex-row">
+        {/* Name gets its own line on a phone; the numbers and the action share
+            the second one because none of them needs full width. */}
+        <div className="space-y-2">
           <Input
             value={chName}
+            maxLength={80}
             placeholder="e.g. 30 days of study"
             onChange={(e) => setChName(e.target.value)}
           />
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={chCategory}
+              aria-label="Challenge category"
+              onChange={(e) => setChCategory(e.target.value)}
+              className={SELECT_CLASS}
+            >
+              <option value="general">Any category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={chPrivate ? "private" : "public"}
+              aria-label="Challenge visibility"
+              onChange={(e) => setChPrivate(e.target.value === "private")}
+              className={SELECT_CLASS}
+            >
+              <option value="public">Public</option>
+              <option value="private">Invite code only</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
+              <Input
+                type="number"
+                min={2}
+                max={365}
+                value={chDays}
+                onChange={(e) => setChDays(Number(e.target.value) || 30)}
+                className="w-20 shrink-0 sm:w-24"
+              />
+              days
+            </label>
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
+              <Input
+                type="number"
+                min={5}
+                max={720}
+                step={5}
+                value={chFloor}
+                onChange={(e) => setChFloor(Number(e.target.value) || 30)}
+                className="w-20 shrink-0 sm:w-24"
+              />
+              min/day to count
+            </label>
+            <Button
+              size="sm"
+              className="tap shrink-0"
+              disabled={createBusy}
+              onClick={() => void createChallenge()}
+            >
+              {createBusy ? (
+                <Loader2 className="mr-1 size-4 animate-spin" />
+              ) : (
+                <Flag className="mr-1 size-4" />
+              )}
+              Create
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Input
-              type="number"
-              min={7}
-              max={90}
-              value={chDays}
-              aria-label="Challenge length in days"
-              onChange={(e) => setChDays(Number(e.target.value) || 30)}
-              className="w-20 shrink-0 sm:w-24"
+              value={joinCode}
+              placeholder="Have a code? e.g. K7MPQ2XZ"
+              autoCapitalize="characters"
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void joinByCode();
+              }}
+              className="font-mono"
             />
             <Button
               size="sm"
-              className="tap flex-1 sm:flex-none"
-              onClick={() => void createChallenge()}
+              variant="secondary"
+              className="tap shrink-0"
+              disabled={codeBusy || !joinCode.trim()}
+              onClick={() => void joinByCode()}
             >
-              <Flag className="mr-1 size-4" /> Create
+              {codeBusy ? (
+                <Loader2 className="mr-1 size-4 animate-spin" />
+              ) : (
+                <KeyRound className="mr-1 size-4" />
+              )}
+              Join
             </Button>
           </div>
         </div>
+
         <div className="mt-3 space-y-2">
           {!challenges?.length ? (
             <p className="text-sm text-muted-foreground">No challenges yet — start one.</p>
           ) : (
-            challenges.map((c) => (
-              <div key={c.id} className="rounded-lg border border-border p-3 text-sm">
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <Trophy className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1">
-                    <div className="break-words font-medium">{c.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {c.starts_on} → {c.ends_on} · {c.members} member{c.members === 1 ? "" : "s"}
+            challenges.map((c) => {
+              const joinable = !c.joined && c.status !== "completed" && c.status !== "cancelled";
+              const pct = c.total_days ? (c.day_index / c.total_days) * 100 : 0;
+              return (
+                <div key={c.id} className="rounded-lg border border-border p-3 text-sm">
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <Trophy className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        {c.visibility === "private" ? (
+                          <Lock
+                            className="size-3 shrink-0 text-muted-foreground"
+                            aria-label="Private"
+                          />
+                        ) : null}
+                        <span className="break-words font-medium">{c.name}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {fmtDay(c.start_at)} → {fmtDay(c.end_at)} · {c.members} member
+                        {c.members === 1 ? "" : "s"} · {c.min_daily_minutes} min/day
+                      </div>
                     </div>
-                  </div>
-                  {c.joined ? (
-                    <span className="shrink-0 rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                      Joined
+                    <span
+                      className={`shrink-0 rounded px-2 py-1 text-xs font-medium capitalize ${STATUS_STYLE[c.status]}`}
+                    >
+                      {c.status}
                     </span>
-                  ) : null}
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  {c.joined ? null : (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="tap flex-1 sm:flex-none"
-                      onClick={() => void joinChallenge(c.id)}
-                    >
-                      Join
-                    </Button>
-                  )}
-                  {c.joined ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="tap flex-1 sm:flex-none"
-                      onClick={() => void leaveChallenge(c.id)}
-                    >
-                      Leave
-                    </Button>
-                  ) : null}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="tap flex-1 sm:flex-none"
-                    aria-expanded={openBoard === c.id}
-                    onClick={() => void toggleBoard(c.id)}
-                  >
-                    {openBoard === c.id ? (
-                      <ChevronUp className="size-4" />
-                    ) : (
-                      <ChevronDown className="size-4" />
-                    )}
-                    Leaderboard
-                  </Button>
-                </div>
-                {/* The actions sit under the title rather than beside it: "Join"
-                    plus "Leaderboard" plus a name never fit one phone line. */}
-                {openBoard === c.id ? (
-                  <div className="mt-3 space-y-1 border-t border-border pt-3">
-                    {boardBusy ? (
-                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="size-3.5 animate-spin" /> Loading…
-                      </p>
-                    ) : board ? (
-                      <>
-                        {board.rows.slice(0, 5).map((r, i) => (
-                          <div key={r.user_id} className="flex items-center gap-2 text-xs">
-                            <span className="w-5 font-semibold tabular-nums text-muted-foreground">
-                              #{i + 1}
-                            </span>
-                            <span className="flex-1 truncate">{r.name || "Anonymous"}</span>
-                            <span className="font-medium tabular-nums">{r.score}%</span>
-                          </div>
-                        ))}
-                        {board.myRank ? (
-                          <p className="pt-1 text-xs font-medium text-primary">
-                            Your rank: #{board.myRank}
-                          </p>
-                        ) : (
-                          <p className="pt-1 text-xs text-muted-foreground">
-                            You haven't joined this challenge.
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Could not load the leaderboard.
-                      </p>
-                    )}
                   </div>
-                ) : null}
-              </div>
-            ))
+
+                  {c.joined && c.status !== "cancelled" ? (
+                    <div className="mt-2 flex items-center gap-3">
+                      <Progress value={Math.min(100, pct)} className="h-1.5 flex-1" />
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        Day {c.day_index} / {c.total_days}
+                        {c.my_score === null ? "" : ` · ${c.my_score}%`}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {/* The actions sit under the title rather than beside it: "Join"
+                      plus "Leaderboard" plus a name never fit one phone line. */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {joinable ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="tap flex-1 sm:flex-none"
+                        onClick={() => void joinChallenge(c.id)}
+                      >
+                        Join
+                      </Button>
+                    ) : null}
+                    {c.joined && c.status === "active" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="tap flex-1 sm:flex-none"
+                        onClick={() => void leaveChallenge(c.id)}
+                      >
+                        Leave
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="tap flex-1 sm:flex-none"
+                      aria-expanded={openBoard === c.id}
+                      onClick={() => toggleBoard(c.id)}
+                    >
+                      {openBoard === c.id ? (
+                        <ChevronUp className="size-4" />
+                      ) : (
+                        <ChevronDown className="size-4" />
+                      )}
+                      Leaderboard
+                    </Button>
+                    {c.invite_code ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tap shrink-0 font-mono text-xs"
+                        aria-label={`Copy invite code ${c.invite_code}`}
+                        onClick={() => void copyCode(c.invite_code as string)}
+                      >
+                        <Copy className="mr-1 size-3.5" />
+                        {c.invite_code}
+                      </Button>
+                    ) : null}
+                    {c.is_owner && (c.status === "upcoming" || c.status === "active") ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tap shrink-0 text-destructive"
+                        onClick={() => void cancelChallenge(c.id)}
+                      >
+                        <Ban className="mr-1 size-3.5" /> Cancel
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {openBoard === c.id ? (
+                    <div className="mt-3 space-y-1 border-t border-border pt-3">
+                      {boardBusy ? (
+                        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="size-3.5 animate-spin" /> Loading…
+                        </p>
+                      ) : board ? (
+                        <>
+                          {board.rows.map((r) => (
+                            <div
+                              key={r.user_id}
+                              className={`flex items-center gap-2 text-xs ${
+                                r.is_me ? "font-medium text-primary" : ""
+                              }`}
+                            >
+                              {/* The server's rank, not the array index — ties
+                                  share a number, and the top five plus your own
+                                  row is not a contiguous list. */}
+                              <span className="w-6 shrink-0 font-semibold tabular-nums text-muted-foreground">
+                                #{r.rank}
+                              </span>
+                              <span className="flex-1 truncate">
+                                {r.name}
+                                {r.has_left ? " (left)" : ""}
+                              </span>
+                              <span className="shrink-0 tabular-nums">{r.score}%</span>
+                            </div>
+                          ))}
+                          <p className="pt-1 text-xs text-muted-foreground">
+                            {board.myRank
+                              ? `You are #${board.myRank} of ${board.totalMembers}`
+                              : `${board.totalMembers} ranked · you have not joined`}
+                            {board.rows.some((r) => r.is_final) ? " · final" : ""}
+                          </p>
+                          {breakdown ? (
+                            <p className="text-xs text-muted-foreground">
+                              Completion {breakdown.completion ?? "—"}% · consistency{" "}
+                              {breakdown.consistency ?? "—"}% · participation{" "}
+                              {breakdown.participation ?? "—"}% ({breakdown.active_days} of{" "}
+                              {breakdown.window_days} days logged)
+                            </p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Could not load the leaderboard.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
           )}
         </div>
       </Panel>
