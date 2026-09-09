@@ -68,6 +68,13 @@ export type Block = {
   goalId?: string;
 };
 
+export type ChallengeRoutine = {
+  challenge_id: string;
+  routine: Record<number, Block[]>;
+  locked_at: string | null;
+  created_at: string;
+};
+
 export type Goal = {
   id: string;
   title: string;

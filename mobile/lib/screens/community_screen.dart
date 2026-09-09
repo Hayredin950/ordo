@@ -368,6 +368,9 @@ class _ChallengeSectionState extends State<_ChallengeSection> {
   Map<String, dynamic>? _board;
   Map<String, dynamic>? _breakdown;
   bool _boardBusy = false;
+  String? _routineChallengeId;
+  Map<String, dynamic>? _routineData;
+  bool _routineBusy = false;
 
   @override
   void dispose() {
@@ -658,31 +661,57 @@ class _ChallengeSectionState extends State<_ChallengeSection> {
               // owner and to members, so its presence is the permission check.
               if (inviteCode != null)
                 _smallButton(inviteCode, () => _copyCode(inviteCode), icon: Icons.copy, mono: true),
-              if (isOwner && (status == 'upcoming' || status == 'active'))
-                _smallButton('Cancel', () => _cancel(id),
-                    icon: Icons.block, color: OrdoColors.destructive),
-            ],
-          ),
+               if (isOwner && (status == 'upcoming' || status == 'active'))
+                 _smallButton('Cancel', () => _cancel(id),
+                     icon: Icons.block, color: OrdoColors.destructive),
+               if (isOwner && (status == 'upcoming' || status == 'active'))
+                 _smallButton(_routineChallengeId == id ? 'Save' : 'Routine',
+                     () => _toggleRoutine(id),
+                     icon: _routineChallengeId == id ? Icons.save : Icons.edit),
+             ],
+           ),
 
-          if (isOpen) ...[
-            const SizedBox(height: 8),
-            Container(height: 1, color: OrdoColors.border),
-            const SizedBox(height: 8),
-            if (_boardBusy)
-              const Center(child: Padding(
-                padding: EdgeInsets.all(12),
-                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-              ))
-            else if (_board != null)
-              _buildLeaderboard(_board!)
-            else
-              Text('Could not load the leaderboard.',
-                  style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
-          ],
-        ],
-      ),
-    );
-  }
+           if (isOpen) ...[
+             const SizedBox(height: 8),
+             Container(height: 1, color: OrdoColors.border),
+             const SizedBox(height: 8),
+             if (_boardBusy)
+               const Center(child: Padding(
+                 padding: EdgeInsets.all(12),
+                 child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+               ))
+             else if (_board != null)
+               _buildLeaderboard(_board!)
+             else
+               Text('Could not load the leaderboard.',
+                   style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
+             // Challenge routine display
+             if (_routineChallengeId == id) ...[
+               const SizedBox(height: 8),
+               Container(height: 1, color: OrdoColors.border),
+               const SizedBox(height: 8),
+               if (_routineBusy)
+                 const Center(child: Padding(
+                   padding: EdgeInsets.all(8),
+                   child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                 ))
+               else if (_routineData != null)
+                 _buildRoutine(_routineData!),
+               if (_routineData != null) ...[
+                 const SizedBox(height: 4),
+                 Text(
+                   _routineData!['locked_at'] != null
+                       ? 'Routine is locked — cannot edit'
+                       : 'Locked until first member joins',
+                   style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground),
+                 ),
+               ],
+             ],
+           ],
+         ],
+       ),
+     );
+   }
 
   Widget _smallButton(String label, VoidCallback onTap,
       {IconData? icon, Color? color, bool mono = false}) {
@@ -776,11 +805,42 @@ class _ChallengeSectionState extends State<_ChallengeSection> {
               style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground),
             ),
           ),
-      ],
-    );
-  }
+       ],
+     );
+   }
 
-  void _toast(String message) {
+   Widget _buildRoutine(Map<String, dynamic> data) {
+     final routine = data['routine'] as Map<String, dynamic>? ?? {};
+     final locked = data['locked_at'] != null;
+     return Container(
+       padding: const EdgeInsets.all(8),
+       decoration: BoxDecoration(
+         color: OrdoColors.card,
+         border: Border.all(color: OrdoColors.border),
+         borderRadius: BorderRadius.circular(8),
+       ),
+       child: Column(
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+           if (locked)
+             Text('Locked routine', style: TextStyle(fontSize: 11, color: OrdoColors.mutedForeground)),
+           ...routine.entries.map((e) {
+             final day = e.key;
+             final blocks = e.value as List;
+             return Padding(
+               padding: const EdgeInsets.symmetric(vertical: 2),
+               child: Text(
+                 'Day $day: ${blocks.map((b) => '${b['title'] ?? ''} (${b['category'] ?? ''}, ${b['start'] ?? ''}–${b['end'] ?? ''})').join(', ')}',
+                 style: TextStyle(fontSize: 11, color: OrdoColors.foreground),
+               ),
+             );
+           }),
+         ],
+       ),
+     );
+   }
+
+   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -861,17 +921,43 @@ class _ChallengeSectionState extends State<_ChallengeSection> {
     _toast('Invite code copied');
   }
 
-  Future<void> _toggleBoard(String challengeId) async {
-    if (_openBoardId == challengeId) {
-      setState(() {
-        _openBoardId = null;
-        _board = null;
-        _breakdown = null;
-      });
-      return;
-    }
-    await _openBoard(challengeId);
-  }
+   Future<void> _toggleRoutine(String challengeId) async {
+     if (_routineChallengeId == challengeId) {
+       setState(() {
+         _routineChallengeId = null;
+         _routineData = null;
+       });
+       return;
+     }
+     setState(() {
+       _routineChallengeId = challengeId;
+       _routineBusy = true;
+       _routineData = null;
+     });
+     try {
+       final data = await OrdoDb.getChallengeRoutine(challengeId);
+       if (mounted) {
+         setState(() {
+           _routineData = data;
+           _routineBusy = false;
+         });
+       }
+     } catch (_) {
+       if (mounted) setState(() => _routineBusy = false);
+     }
+   }
+
+   Future<void> _toggleBoard(String challengeId) async {
+     if (_openBoardId == challengeId) {
+       setState(() {
+         _openBoardId = null;
+         _board = null;
+         _breakdown = null;
+       });
+       return;
+     }
+     await _openBoard(challengeId);
+   }
 
   Future<void> _openBoard(String challengeId) async {
     setState(() {

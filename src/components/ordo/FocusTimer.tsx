@@ -35,7 +35,10 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 function playAlarm() {
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const ctx = new (
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    )();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
@@ -100,8 +103,17 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
   const addPreset = () => {
     const minutes = parseInt(newMinutes, 10);
     if (isNaN(minutes) || minutes <= 0) return;
-    const preset: TimerPreset = { id: uid(), label: `Custom ${customPresets.length + 1}`, minutes };
-    const updated = [...customPresets, preset];
+    // Adding a duration that is already on the row would give two identical
+    // chips, so select the existing one instead of stacking a duplicate.
+    const existing = customPresets.find((p) => p.minutes === minutes);
+    if (existing) {
+      select(minutes);
+      setNewMinutes("25");
+      setShowAdd(false);
+      return;
+    }
+    const preset: TimerPreset = { id: uid(), label: `${minutes}m`, minutes };
+    const updated = [...customPresets, preset].sort((a, b) => a.minutes - b.minutes);
     setCustomPresets(updated);
     saveCustomPresets(updated);
     setNewMinutes("25");
@@ -125,32 +137,49 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
   return (
     <Panel>
       <PanelTitle title="Focus timer" />
-      <p className="text-xs text-muted-foreground px-1">One block at a time — the timer is the task.</p>
-      <ScrollRow className="sm:justify-end">
+      <p className="text-xs text-muted-foreground px-1">
+        One block at a time — the timer is the task.
+      </p>
+      {/* `justify-end` must not go on this row: it is an overflow-x:auto flex
+          container, and flex-end makes content overflow past the *start* edge,
+          which browsers will not let you scroll back to. Once a few custom
+          presets existed, the earlier chips were pushed off the left and became
+          permanently unreachable. An auto margin on the first chip right-aligns
+          the group when it fits and collapses to 0 when it does not. */}
+      <ScrollRow>
         {PRESETS.map((p) => (
           <SegButton
             key={p.id}
             active={total === p.minutes * 60}
-            className="px-2.5 py-1.5 text-[11px] sm:py-1"
+            className="px-2.5 py-1.5 text-[11px] sm:py-1 sm:first:ml-auto"
             onClick={() => select(p.minutes)}
           >
             {p.label}
           </SegButton>
         ))}
         {customPresets.map((p) => (
-          <span key={p.id} className="inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-1 text-[11px]">
+          // `scroll-row-item` is what SegButton already carries: flex:none, so
+          // the chip keeps its width instead of being squeezed to nothing as
+          // siblings are added. Without it each new preset shrank all the others.
+          <span
+            key={p.id}
+            className="scroll-row-item inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-1 text-[11px]"
+          >
             <SegButton
               active={total === p.minutes * 60}
               className="px-2 py-1.5 text-[11px] sm:py-1"
               onClick={() => select(p.minutes)}
             >
-              {p.label}
+              {/* Rendered from `minutes`, not the stored label: "Custom N" was
+                  numbered from the list length, so deleting one made the next
+                  one reuse a name that was already taken. */}
+              {p.minutes}m
             </SegButton>
             <button
               type="button"
               onClick={() => removePreset(p.id)}
-              className="ml-0.5 rounded-full hover:bg-accent hover:text-foreground"
-              aria-label={`Remove ${p.label} preset`}
+              className="ml-0.5 rounded-full p-1 hover:bg-accent hover:text-foreground"
+              aria-label={`Remove the ${p.minutes}-minute preset`}
             >
               <X className="size-2.5" />
             </button>

@@ -3,8 +3,10 @@ import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
 import type {
   BoardRow,
+  Block,
   Challenge,
   ChallengeBreakdown,
+  ChallengeRoutine,
   ChallengeStatus,
   PairingRequest,
   Peer,
@@ -31,6 +33,8 @@ import {
   KeyRound,
   Lock,
   Ban,
+  Edit3,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -161,6 +165,11 @@ export function CommunityView() {
   const [breakdown, setBreakdown] = useState<ChallengeBreakdown | null>(null);
   const [boardBusy, setBoardBusy] = useState(false);
 
+  // Challenge routine editor
+  const [editingRoutine, setEditingRoutine] = useState<string | null>(null);
+  const [routineData, setRoutineData] = useState<ChallengeRoutine | null>(null);
+  const [routineBusy, setRoutineBusy] = useState(false);
+
   const loadChallenges = useCallback(async () => {
     if (!user) return;
     try {
@@ -181,8 +190,6 @@ export function CommunityView() {
     setBoard(null);
     setBreakdown(null);
     try {
-      // The breakdown is the caller's own row and 404s for a non-member, so a
-      // failure there must not blank out the leaderboard beside it.
       const [rows, mine] = await Promise.all([
         db.challengeLeaderboard(id),
         db.challengeBreakdown(id).catch(() => null),
@@ -195,6 +202,40 @@ export function CommunityView() {
       setBoardBusy(false);
     }
   }, []);
+
+  const toggleRoutineEditor = useCallback(async (id: string, c: Challenge) => {
+    if (editingRoutine === id) {
+      setEditingRoutine(null);
+      setRoutineData(null);
+      return;
+    }
+    setRoutineBusy(true);
+    try {
+      const routine = await db.getChallengeRoutine(id);
+      setRoutineData(routine);
+      setEditingRoutine(id);
+    } catch {
+      toast.error("Could not load challenge routine");
+    } finally {
+      setRoutineBusy(false);
+    }
+  }, [editingRoutine]);
+
+  const saveRoutine = useCallback(async (id: string) => {
+    if (!routineData) return;
+    setRoutineBusy(true);
+    try {
+      await db.updateChallengeRoutine(id, routineData.routine);
+      toast.success("Challenge routine updated");
+      setEditingRoutine(null);
+      setRoutineData(null);
+      void loadChallenges();
+    } catch (err) {
+      toast.error(errMsg(err, "Could not save routine"));
+    } finally {
+      setRoutineBusy(false);
+    }
+  }, [routineData]);
 
   const toggleBoard = (id: string) => {
     if (openBoard === id) {
@@ -660,6 +701,20 @@ export function CommunityView() {
                         <Ban className="mr-1 size-3.5" /> Cancel
                       </Button>
                     ) : null}
+                    {c.is_owner && (c.status === "upcoming" || c.status === "active") ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tap shrink-0"
+                        onClick={() => void toggleRoutineEditor(c.id, c)}
+                      >
+                        {editingRoutine === c.id ? (
+                          <><Save className="mr-1 size-3.5" /> Save</>
+                        ) : (
+                          <><Edit3 className="mr-1 size-3.5" /> Routine</>
+                        )}
+                      </Button>
+                    ) : null}
                   </div>
 
                   {openBoard === c.id ? (
@@ -710,6 +765,57 @@ export function CommunityView() {
                           Could not load the leaderboard.
                         </p>
                       )}
+                    </div>
+                  ) : null}
+
+                  {/* Challenge routine editor */}
+                  {editingRoutine === c.id ? (
+                    <div className="mt-3 space-y-2 border-t border-border pt-3">
+                      <p className="text-xs font-medium text-foreground">
+                        Challenge Routine
+                        {routineData?.locked_at ? " (locked)" : ""}
+                      </p>
+                      {routineBusy ? (
+                        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="size-3.5 animate-spin" /> Loading routine…
+                        </p>
+                      ) : routineData ? (
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {Object.entries(routineData.routine)
+                            .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                            .map(([day, blocks]) => (
+                              <div key={day} className="text-xs">
+                                <span className="font-medium text-muted-foreground">Day {day}:</span>{" "}
+                                {(blocks as Block[]).map((b) => (
+                                  <span key={b.id} className="ml-2">
+                                    {b.title} ({b.category}, {b.start}–{b.end})
+                                  </span>
+                                ))}
+                              </div>
+                            ))}
+                        </div>
+                      ) : null}
+                      {routineData && !routineData.locked_at ? (
+                        <p className="text-xs text-muted-foreground">
+                          Edit the routine in your plan — it will be auto-generated when you join
+                          a challenge. Locked routines cannot be edited.
+                        </p>
+                      ) : null}
+                      {editingRoutine && routineData && !routineData.locked_at ? (
+                        <Button
+                          size="sm"
+                          className="tap shrink-0"
+                          disabled={routineBusy}
+                          onClick={() => void saveRoutine(c.id)}
+                        >
+                          {routineBusy ? (
+                            <Loader2 className="mr-1 size-4 animate-spin" />
+                          ) : (
+                            <Save className="mr-1 size-4" />
+                          )}
+                          Save
+                        </Button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

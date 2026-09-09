@@ -224,11 +224,39 @@ class Challenge {
   final String ownerId;
   final int members;
   final bool joined;
+  final bool isOwner;
+  final String? inviteCode;
+  final String? challengeRoutine;
 
   const Challenge({
     required this.id, required this.name, required this.startsOn,
     required this.endsOn, required this.ownerId, required this.members, required this.joined,
+    this.isOwner = false, this.inviteCode, this.challengeRoutine,
   });
+}
+
+class ChallengeRoutine {
+  final String challengeId;
+  final Map<int, List<Block>> routine;
+  final String? lockedAt;
+
+  const ChallengeRoutine({
+    required this.challengeId, required this.routine, this.lockedAt,
+  });
+
+  factory ChallengeRoutine.fromJson(Map<String, dynamic> json) => ChallengeRoutine(
+    challengeId: json['challenge_id'] ?? '',
+    routine: (json['routine'] as Map<String, dynamic>?)?.map(
+      (k, v) => MapEntry(int.parse(k), (v as List).map((b) => Block.fromJson(b)).toList()),
+    ) ?? {},
+    lockedAt: json['locked_at'],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'challenge_id': challengeId,
+    'routine': routine.map((k, v) => MapEntry(k.toString(), v.map((b) => b.toJson()).toList())),
+    'locked_at': lockedAt,
+  };
 }
 
 class FutureLetter {

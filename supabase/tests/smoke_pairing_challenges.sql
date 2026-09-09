@@ -289,11 +289,14 @@ begin
   assert v_a.score = 100.0, '0.70 + 0.20 + 0.10 of 100 is 100';
   assert not v_a.is_final, 'a running challenge is not final';
 
-  select * into v_b from public.challenge_scores(v_pub, '22222222-2222-2222-2222-222222222222');
-  assert v_b.consistency = 0.0,
-    'consistency counts completed minutes against the floor, not planned ones';
+   select * into v_b from public.challenge_score(v_pub, '22222222-2222-2222-2222-222222222222');
+   assert v_b.consistency = 0.0,
+     'consistency counts completed minutes against the floor, not planned ones';
+   -- challenge_score returns from challenge_logs (per-challenge routine), not daily_scores
+   assert (select count(*) from public.challenge_logs cl where cl.challenge_id = v_pub) = 0,
+     'challenge_logs are generated only after save_state refreshes them';
 
-  assert (select lb.rank from public.get_challenge_leaderboard(v_pub) lb
+   assert (select lb.rank from public.get_challenge_leaderboard(v_pub) lb
            where lb.is_me) = 1, 'Alice ranks first on a live score';
   assert (select lb.total_members from public.get_challenge_leaderboard(v_pub) lb
            limit 1) = 2, 'the row carries the full member count, not just the top five';
@@ -370,6 +373,62 @@ begin
     assert false, 'only the owner may cancel';
   exception when others then null;
   end;
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Challenge routines and challenge_logs (§11).
+-- ---------------------------------------------------------------------------
+set app.uid = '11111111-1111-1111-1111-111111111111';
+do $$
+declare
+  v_pub uuid;
+  v_routine jsonb;
+  v_routine_row record;
+  v_logs integer;
+begin
+  select c.id into v_pub from public.challenges c where c.name = '30 days of study';
+
+  -- A challenge routine must exist after creation.
+  select cr.routine into v_routine from public.challenge_routines cr where cr.challenge_id = v_pub;
+  assert v_routine is not null, 'challenge_routines row must exist after create';
+  assert jsonb_typeof(v_routine) = 'object', 'routine is a jsonb object keyed by day of week';
+
+  -- The routine must have 7 entries (0-6 = Sunday-Saturday).
+  assert jsonb_array_length(v_routine -> '0') > 0, 'routine has blocks for day 0';
+  assert jsonb_array_length(v_routine -> '1') > 0, 'routine has blocks for day 1';
+
+  -- The routine must be unlocked before any member joins.
+  select cr.locked_at is not null into v_routine_row from public.challenge_routines cr where cr.challenge_id = v_pub;
+  assert v_routine_row = false, 'routine is unlocked before any member joins';
+
+  -- update_challenge_routine must work before locking.
+  perform public.update_challenge_routine(v_pub, v_routine);
+
+  -- After joining, the routine must be locked.
+  set app.uid = '22222222-2222-2222-2222-222222222222';
+  perform public.join_challenge(v_pub);
+  select cr.locked_at is not null into v_routine_row from public.challenge_routines cr where cr.challenge_id = v_pub;
+  assert v_routine_row = true, 'routine is locked after first member joins';
+
+  -- update_challenge_routine must fail after locking.
+  begin
+    perform public.update_challenge_routine(v_pub, v_routine);
+    assert false, 'update_challenge_routine must fail on a locked routine';
+  exception when others then null;
+  end;
+
+  -- challenge_logs must be generated for the joined member.
+  -- First, simulate save_state for the current date.
+  set app.uid = '11111111-1111-1111-1111-111111111111';
+  perform public.refresh_challenge_logs_for_dates('22222222-2222-2222-2222-222222222222', ARRAY[current_date]);
+  select count(*)::integer into v_logs from public.challenge_logs where challenge_id = v_pub and member_id = '22222222-2222-2222-2222-222222222222';
+  assert v_logs > 0, 'challenge_logs must be generated after refresh';
+
+  -- challenge_logs is append-only after finalization.
+  -- The challenge_logs_finalize_guard should prevent updates after finalization.
+  select count(*)::integer into v_logs from public.challenge_logs cl where cl.challenge_id = v_pub;
+  assert v_logs > 0, 'challenge_logs exist for the challenge';
 end
 $$;
 

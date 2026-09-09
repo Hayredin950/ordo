@@ -6,8 +6,10 @@
  * aggregates only. See supabase/migrations/0001_init.sql.
  */
 import { dbError, sb } from "./supabase";
-import type { Block, OrdoState } from "./ordo";
+import type { Block, ChallengeRoutine, OrdoState } from "./ordo";
 import type { CategoryRow } from "./categories";
+
+export type { Block, OrdoState, ChallengeRoutine } from "./ordo";
 
 export type Peer = {
   id: string;
@@ -285,13 +287,21 @@ export async function challengeBreakdown(id: string): Promise<ChallengeBreakdown
   return rows[0] ?? null;
 }
 
-export async function challengeScore(userId: string, challengeId: string): Promise<number | null> {
-  const { data, error } = await sb().rpc("challenge_score", {
-    p_user: userId,
+// ---- Challenge Routines ---------------------------------------------------
+
+export async function getChallengeRoutine(challengeId: string): Promise<ChallengeRoutine | null> {
+  const { data, error } = await sb().rpc("get_challenge_routine", { p_challenge: challengeId });
+  if (error) throw dbError(error, "Could not load challenge routine");
+  const row = (data ?? []) as ChallengeRoutine[];
+  return row[0] ?? null;
+}
+
+export async function updateChallengeRoutine(challengeId: string, routine: Record<number, Block[]>): Promise<void> {
+  const { error } = await sb().rpc("update_challenge_routine", {
     p_challenge: challengeId,
+    p_routine: routine,
   });
-  if (error) throw dbError(error, "Could not load challenge score");
-  return (data as number | null) ?? null;
+  if (error) throw dbError(error, "Could not update challenge routine");
 }
 
 // ---- Future-self letters ----------------------------------------------------

@@ -166,6 +166,27 @@ class OrdoDb {
     }
   }
 
+  /// Get the auto-generated challenge routine for a challenge.
+  static Future<Map<String, dynamic>?> getChallengeRoutine(String challengeId) async {
+    try {
+      final res = await _client.rpc('get_challenge_routine', params: {
+        'p_challenge': challengeId,
+      });
+      final rows = List<Map<String, dynamic>>.from(res as List);
+      return rows.isEmpty ? null : rows.first;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Update the challenge routine (owner only, before locked_at).
+  static Future<void> updateChallengeRoutine(String challengeId, Map<String, dynamic> routine) async {
+    await _client.rpc('update_challenge_routine', params: {
+      'p_challenge': challengeId,
+      'p_routine': routine,
+    });
+  }
+
   // --- Future Letters ---
   static Future<List<Map<String, dynamic>>> listLetters() async {
     if (_user == null) return [];
