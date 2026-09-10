@@ -155,9 +155,11 @@ as $$
     when p_start1::time >= p_end2::time or p_start2::time >= p_end1::time
     then 0
     else
-      (extract(epoch from least(p_end1::time, p_end2::time) - greatest(p_start1::time, p_start2::time)) / 60)::numeric
+      (extract(epoch from least(p_end1::time, p_end2::time)
+                    - greatest(p_start1::time, p_start2::time)) / 60)::numeric
       /
-      nullif((extract(epoch from least(p_end1::time, p_end2::time) - greatest(p_start1::time, p_start2::time)) / 60)::numeric, 0) * 100
+      nullif((extract(epoch from greatest(p_end1::time, p_end2::time)
+                    - least(p_start1::time, p_start2::time)) / 60)::numeric, 0) * 100
   end;
 $$;
 
@@ -166,15 +168,56 @@ $$;
 -- ---------------------------------------------------------------------------
 
 create or replace function public.get_challenge_routine(p_challenge uuid)
-returns jsonb
+returns table (
+  challenge_id uuid,
+  routine      jsonb,
+  locked_at    timestamptz
+)
 language sql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select cr.routine
+  select cr.challenge_id, cr.routine, cr.locked_at
     from public.challenge_routines cr
     where cr.challenge_id = p_challenge;
+$$;
+
+create or replace function public.validate_challenge_routine(p_routine jsonb)
+returns boolean
+language plpgsql
+immutable
+as $$
+declare
+  v_day  text;
+  v_blk  jsonb;
+begin
+  if p_routine is null or jsonb_typeof(p_routine) <> 'object' then
+    return false;
+  end if;
+
+  for v_day in select jsonb_object_keys(p_routine) loop
+    if v_day !~ '^[0-6]$' then return false; end if;
+    if jsonb_typeof(p_routine -> v_day) <> 'array' then return false; end if;
+
+    for v_blk in select jsonb_array_elements(p_routine -> v_day) loop
+      if jsonb_typeof(v_blk) <> 'object' then return false; end if;
+      if coalesce(v_blk ->> 'id', '') = '' then return false; end if;
+      if coalesce(v_blk ->> 'title', '') = '' then return false; end if;
+      if coalesce(v_blk ->> 'category', '') = '' then return false; end if;
+      if v_blk ->> 'priority' not in ('must', 'nice') then return false; end if;
+      if v_blk ->> 'start' !~ '^\d{2}:\d{2}$' or v_blk ->> 'end' !~ '^\d{2}:\d{2}$' then return false; end if;
+      begin
+        perform (v_blk ->> 'start')::time;
+        perform (v_blk ->> 'end')::time;
+      exception when others then
+        return false;
+      end;
+    end loop;
+  end loop;
+
+  return true;
+end;
 $$;
 
 create or replace function public.update_challenge_routine(
@@ -199,6 +242,10 @@ begin
   if v_ch.cancelled_at is not null then raise exception 'Challenge was cancelled' using errcode = 'P0002'; end if;
   if v_ch.finalized_at is not null then raise exception 'Challenge has already been scored' using errcode = 'P0002'; end if;
 
+  if not public.validate_challenge_routine(p_routine) then
+    raise exception 'Invalid routine structure' using errcode = '22023';
+  end if;
+
   select cr.locked_at is not null into v_locked
     from public.challenge_routines cr
    where cr.challenge_id = p_challenge;
@@ -208,8 +255,18 @@ begin
   insert into public.challenge_routines (challenge_id, routine)
   values (p_challenge, p_routine)
   on conflict (challenge_id) do update
-    set routine = excluded.routine,
-        updated_at = now();
+    set routine = excluded.routine;
+
+  -- The routine is only editable before the first member joins (it locks on
+  -- join), so the editor is the challenge creator and the only member. Re-derive
+  -- their challenge_logs so the edited schedule is reflected in their scores.
+  perform public.refresh_challenge_logs_for_dates(
+    v_uid,
+    (select array_agg(d::date)
+       from generate_series(v_ch.start_at::date,
+                            least(v_ch.end_at::date, current_date),
+                            '1 day'::interval) d)
+  );
 end;
 $$;
 
@@ -332,23 +389,48 @@ begin
         v_ch_blocks := coalesce(v_routine -> v_day_of_week::text, '[]'::jsonb);
 
         if jsonb_array_length(v_ch_blocks) = 0 then
+          -- No routine blocks this weekday: any leftover log rows for this
+          -- date are stale and must be reconciled away.
+          delete from public.challenge_logs
+           where challenge_id = v_challenge_id
+             and member_id = p_user
+             and date = v_date;
           continue;
         end if;
 
         declare
           v_log jsonb := coalesce(v_state -> 'log' -> to_char(v_date, 'YYYY-MM-DD'), '{}'::jsonb);
+          v_matched_ids text[] := '{}';
+          v_best_overlap numeric;
+          v_overlap numeric;
+          v_src_start text;
+          v_src_end   text;
         begin
+          -- For each challenge routine block, pick the user block with the
+          -- largest overlap percentage (>= 50 required). Ties break on source
+          -- block id so the winner is deterministic.
           for v_ch_block in select jsonb_array_elements(v_ch_blocks) loop
             v_matched_id := null;
+            v_source_id  := null;
+            v_src_start  := null;
+            v_src_end    := null;
+            v_best_overlap := 0;
             for v_block in select jsonb_array_elements(v_user_blocks) loop
               if v_block ->> 'category' = v_ch_block ->> 'category' then
-                if public.calculate_block_overlap(
+                v_overlap := coalesce(public.calculate_block_overlap(
                   v_block ->> 'start', v_block ->> 'end',
                   v_ch_block ->> 'start', v_ch_block ->> 'end'
-                ) >= 50 then
+                ), 0);
+                if v_overlap >= 50
+                   and (v_source_id is null
+                        or v_overlap > v_best_overlap
+                        or (v_overlap = v_best_overlap
+                            and v_block ->> 'id' < v_source_id)) then
+                  v_best_overlap := v_overlap;
                   v_matched_id := v_ch_block ->> 'id';
-                  v_source_id := v_block ->> 'id';
-                  exit;
+                  v_source_id  := v_block ->> 'id';
+                  v_src_start  := v_block ->> 'start';
+                  v_src_end    := v_block ->> 'end';
                 end if;
               end if;
             end loop;
@@ -358,11 +440,11 @@ begin
                 v_ch_block ->> 'start',
                 v_ch_block ->> 'end'
               );
-              v_completion_pct := 0;
-              if v_source_id is not null then
-                v_completion_pct := coalesce((v_log ->> v_source_id)::numeric, 0);
-              end if;
-              v_completed_min := v_planned_min * v_completion_pct / 100;
+              v_completion_pct := coalesce((v_log ->> v_source_id)::numeric, 0);
+              -- Actual completed time comes from the matched source block's
+              -- duration, not the planned challenge duration.
+              v_completed_min := public.block_minutes(v_src_start, v_src_end)
+                                   * v_completion_pct / 100;
 
               insert into public.challenge_logs (
                 challenge_id, member_id, date, routine_block_id,
@@ -380,9 +462,18 @@ begin
                 completion_pct = excluded.completion_pct,
                 updated_at = now();
 
+              v_matched_ids := v_matched_ids || v_matched_id;
               v_inserted := v_inserted + 1;
             end if;
           end loop;
+
+          -- Reconcile stale rows: challenge-log rows for this member, challenge
+          -- and date whose routine block no longer matches must not survive.
+          delete from public.challenge_logs
+           where challenge_id = v_challenge_id
+             and member_id = p_user
+             and date = v_date
+             and routine_block_id <> all (v_matched_ids);
         end;
       end loop;
     end loop;
@@ -391,6 +482,129 @@ begin
   return v_inserted;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 7b. save_state() integration
+--
+-- Same pipeline as 0006 (history cap of 30, redo cleared on write, unchanged
+-- daily_scores handling) plus a challenge-log refresh for the changed dates.
+-- A routine edit moves every day of that weekday, so it uses the same rolling
+-- window the daily_scores path already uses; a log tick or single-date
+-- override moves only that date.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.save_state(p_state jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_prev jsonb;
+  v_hist jsonb;
+  v_days date[];
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated' using errcode = '42501';
+  end if;
+  if p_state is null or jsonb_typeof(p_state) <> 'object' then
+    raise exception 'state must be a JSON object' using errcode = '22023';
+  end if;
+
+  select state, history into v_prev, v_hist
+    from public.user_state where user_id = v_uid for update;
+
+  if v_prev is null then
+    insert into public.user_state (user_id, state, history, redo)
+      values (v_uid, p_state, '[]'::jsonb, '[]'::jsonb);
+    perform public.refresh_daily_scores(v_uid, current_date - 180, current_date);
+    perform public.refresh_challenge_logs_for_dates(
+      v_uid, (select array_agg(d::date) from generate_series(current_date - 180, current_date, '1 day'::interval) d));
+    return;
+  end if;
+
+  if v_prev = p_state then
+    update public.user_state set updated_at = now() where user_id = v_uid;
+    return;
+  end if;
+
+  v_hist := coalesce(v_hist, '[]'::jsonb) || jsonb_build_array(v_prev);
+  while jsonb_array_length(v_hist) > 30 loop
+    v_hist := v_hist - 0;
+  end loop;
+
+  update public.user_state
+     set state = p_state, history = v_hist, redo = '[]'::jsonb, updated_at = now()
+   where user_id = v_uid;
+
+  if (v_prev -> 'routine') is distinct from (p_state -> 'routine') then
+    perform public.refresh_daily_scores(v_uid, current_date - 180, current_date);
+    perform public.refresh_challenge_logs_for_dates(
+      v_uid, (select array_agg(d::date) from generate_series(current_date - 180, current_date, '1 day'::interval) d));
+  else
+    select array_agg(d) into v_days
+      from (
+        select public.changed_date_keys(v_prev -> 'log', p_state -> 'log') as d
+        union
+        select public.changed_date_keys(v_prev -> 'overrides', p_state -> 'overrides')
+      ) touched;
+    perform public.refresh_daily_scores(v_uid, coalesce(v_days, '{}'::date[]));
+    if v_days is not null and array_length(v_days, 1) > 0 then
+      perform public.refresh_challenge_logs_for_dates(v_uid, v_days);
+    end if;
+  end if;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 7c. Backfill for challenges created before this migration
+--
+-- A pre-0007 challenge has no routine row, so the challenge-log pipeline
+-- would skip it and its members would score zero. Give every challenge the
+-- same deterministic default a fresh create_challenge generates, then score
+-- the members' elapsed window from their existing state. No-ops on a fresh
+-- database.
+-- ---------------------------------------------------------------------------
+
+insert into public.challenge_routines (challenge_id, routine)
+select c.id, (
+  select jsonb_object_agg(d::text, jsonb_build_array(jsonb_build_object(
+           'id', c.id::text || '-' || c.category || '-' || d::text,
+           'title', c.name || ' block',
+           'start', '09:00',
+           'end', to_char('09:00'::time + make_interval(mins => c.min_daily_minutes), 'HH24:MI'),
+           'category', c.category,
+           'priority', 'must'
+         )))
+    from generate_series(0, 6) as d
+)
+from public.challenges c
+where not exists (
+  select 1 from public.challenge_routines cr where cr.challenge_id = c.id
+);
+
+do $$
+declare
+  v_m record;
+  v_start date;
+begin
+  for v_m in
+    select cm.challenge_id, cm.user_id, cm.joined_at, cm.left_at
+      from public.challenge_members cm
+      join public.challenges c on c.id = cm.challenge_id
+     where cm.status in ('active', 'left')
+       and c.finalized_at is null
+       and c.cancelled_at is null
+  loop
+    select c.start_at::date into v_start from public.challenges c where c.id = v_m.challenge_id;
+    perform public.refresh_challenge_logs_for_dates(
+      v_m.user_id,
+      (select array_agg(d::date)
+         from generate_series(v_start, current_date, '1 day'::interval) d)
+    );
+  end loop;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 8. Modify existing functions to add new signatures for grants
@@ -474,83 +688,33 @@ begin
   values (v_row.id, v_uid)
   on conflict (challenge_id, user_id) do nothing;
 
-  -- Generate default challenge routine from category
-  v_routine := jsonb_build_object(
-    '0', jsonb_build_array(
-      jsonb_build_object(
-        'id', v_row.id::text || '-study-0',
-        'title', trim(p_name) || ' block',
-        'start', '09:00',
-        'end', '10:00',
-        'category', v_cat,
-        'priority', 'must'
-      )
-    ),
-    '1', jsonb_build_array(
-      jsonb_build_object(
-        'id', v_row.id::text || '-study-1',
-        'title', trim(p_name) || ' block',
-        'start', '09:00',
-        'end', '10:00',
-        'category', v_cat,
-        'priority', 'must'
-      )
-    ),
-    '2', jsonb_build_array(
-      jsonb_build_object(
-        'id', v_row.id::text || '-study-2',
-        'title', trim(p_name) || ' block',
-        'start', '09:00',
-        'end', '10:00',
-        'category', v_cat,
-        'priority', 'must'
-      )
-    ),
-    '3', jsonb_build_array(
-      jsonb_build_object(
-        'id', v_row.id::text || '-study-3',
-        'title', trim(p_name) || ' block',
-        'start', '09:00',
-        'end', '10:00',
-        'category', v_cat,
-        'priority', 'must'
-      )
-    ),
-    '4', jsonb_build_array(
-      jsonb_build_object(
-        'id', v_row.id::text || '-study-4',
-        'title', trim(p_name) || ' block',
-        'start', '09:00',
-        'end', '10:00',
-        'category', v_cat,
-        'priority', 'must'
-      )
-    ),
-    '5', jsonb_build_array(
-      jsonb_build_object(
-        'id', v_row.id::text || '-study-5',
-        'title', trim(p_name) || ' block',
-        'start', '09:00',
-        'end', '10:00',
-        'category', v_cat,
-        'priority', 'must'
-      )
-    ),
-    '6', jsonb_build_array(
-      jsonb_build_object(
-        'id', v_row.id::text || '-study-6',
-        'title', trim(p_name) || ' block',
-        'start', '09:00',
-        'end', '10:00',
-        'category', v_cat,
-        'priority', 'must'
-      )
-    )
+  -- Generate default challenge routine: one deterministic block per weekday,
+  -- in the challenge category, lasting at least min_daily_minutes.
+  v_routine := (
+    select jsonb_object_agg(d::text, jsonb_build_array(jsonb_build_object(
+             'id', v_row.id::text || '-' || v_cat || '-' || d::text,
+             'title', trim(p_name) || ' block',
+             'start', '09:00',
+             'end', to_char('09:00'::time + make_interval(mins => v_floor), 'HH24:MI'),
+             'category', v_cat,
+             'priority', 'must'
+           )))
+      from generate_series(0, 6) as d
   );
 
   insert into public.challenge_routines (challenge_id, routine)
   values (v_row.id, v_routine)
   on conflict (challenge_id) do nothing;
+
+  -- The creator is the first member: score their existing activity into
+  -- challenge_logs for the part of the window that has already begun.
+  perform public.refresh_challenge_logs_for_dates(
+    v_uid,
+    (select array_agg(d::date)
+       from generate_series(v_row.start_at::date,
+                            least(v_row.end_at::date, current_date),
+                            '1 day'::interval) d)
+  );
 
   if v_vis = 'private' then
     for v_try in 1..10 loop
@@ -593,13 +757,8 @@ declare
   v_closes   timestamptz;
   v_status   text;
   v_locked   boolean;
-  v_routine  jsonb;
   v_from_d   date;
   v_to_d     date;
-  v_d        date;
-  v_day      integer;
-  v_ch_blocks jsonb;
-  v_challenge_id uuid;
 begin
   if v_uid is null then raise exception 'Not authenticated' using errcode = '42501'; end if;
 
@@ -613,7 +772,7 @@ begin
 
   v_closes := v_ch.start_at + greatest(interval '1 day', (v_ch.end_at - v_ch.start_at) * 0.2);
   if now() > v_closes then
-    raise exception 'Joining closed on ' || to_char(v_closes, 'YYYY-MM-DD')
+    raise exception 'Joining closed on %', to_char(v_closes, 'YYYY-MM-DD')
       using errcode = 'P0002';
   end if;
 
@@ -634,10 +793,12 @@ begin
     raise exception 'Challenge is full' using errcode = 'P0002';
   end if;
 
-  -- Lock challenge_routines row and check locked_at
+  -- Lock the challenge_routines row so two concurrent joins cannot both
+  -- observe locked_at is null (first-member race, plan §5).
   select cr.locked_at is not null into v_locked
     from public.challenge_routines cr
-   where cr.challenge_id = p_challenge;
+   where cr.challenge_id = p_challenge
+   for update;
 
   -- Insert/update membership
   insert into public.challenge_members (challenge_id, user_id, joined_at, status, left_at)
@@ -655,30 +816,11 @@ begin
        and locked_at is null;
   end if;
 
-  -- Initialize challenge_logs for the member's effective window
+  -- Initialize challenge_logs for the member's effective window: a late
+  -- joiner is never scored for days before they joined.
   v_from_d := greatest(v_ch.start_at::date, now()::date);
   v_to_d := least(v_ch.end_at::date, current_date);
 
-  select cr.routine into v_routine
-    from public.challenge_routines cr
-   where cr.challenge_id = p_challenge;
-
-  if v_routine is not null then
-    foreach v_d in array (
-      select d::date from generate_series(v_from_d, v_to_d, '1 day'::interval) as d
-    ) loop
-      v_day := extract(dow from v_d)::integer;
-      v_ch_blocks := coalesce(v_routine -> v_day::text, '[]'::jsonb);
-      if jsonb_array_length(v_ch_blocks) > 0 then
-        -- Insert placeholder challenge_logs rows; they will be filled by refresh_challenge_logs_for_dates
-        -- But for now, we create the structure so the member has log rows
-        -- Actual matching happens in refresh_challenge_logs_for_dates
-        null;
-      end if;
-    end loop;
-  end if;
-
-  -- Trigger refresh of challenge_logs for the effective dates
   perform public.refresh_challenge_logs_for_dates(
     v_uid,
     (select array_agg(d::date) from generate_series(v_from_d, v_to_d, '1 day'::interval) as d)
@@ -723,17 +865,25 @@ as $$
        and cm.status in ('active', 'left')
        and (p_user is null or cm.user_id = p_user)
   ),
+  days as (
+    select cl.challenge_id, cl.member_id, cl.date,
+           least(100, sum(cl.completion_pct)) as day_pct,
+           sum(cl.completed_minutes) as day_minutes
+      from public.challenge_logs cl
+     where cl.challenge_id = p_challenge
+     group by cl.challenge_id, cl.member_id, cl.date
+  ),
   agg as (
     select w.user_id,
            greatest(0, (w.to_d - w.from_d) + 1) as days,
-           coalesce(sum(cl.completion_pct), 0) as sum_pct,
-           count(cl.date) filter (where cl.completed_minutes >= w.floor_min) as floor_days,
-           count(cl.date) filter (where cl.completed_minutes > 0) as busy_days
+           coalesce(sum(d.day_pct), 0) as sum_pct,
+           count(d.date) filter (where d.day_minutes >= w.floor_min) as floor_days,
+           count(d.date) filter (where d.day_minutes > 0) as busy_days
       from w
-      left join public.challenge_logs cl
-        on cl.challenge_id = p_challenge
-        and cl.member_id = w.user_id
-        and cl.date between w.from_d and w.to_d
+      left join days d
+        on d.challenge_id = p_challenge
+       and d.member_id = w.user_id
+       and d.date between w.from_d and w.to_d
       group by w.user_id, w.to_d, w.from_d
   )
   select agg.user_id,
@@ -778,6 +928,12 @@ begin
       loop
         perform public.refresh_daily_scores(v_m.user_id,
                                             v_ch.start_at::date, v_ch.end_at::date);
+        -- Ensure the challenge-log state is current before the score freezes.
+        perform public.refresh_challenge_logs_for_dates(
+          v_m.user_id,
+          (select array_agg(d::date)
+             from generate_series(v_ch.start_at::date, v_ch.end_at::date, '1 day'::interval) as d)
+        );
       end loop;
 
       with final as (
@@ -818,17 +974,18 @@ set search_path = public, pg_temp
 as $$
 declare
   v_finalized boolean;
+  v_challenge uuid := coalesce(new.challenge_id, old.challenge_id);
 begin
   select c.finalized_at is not null into v_finalized
     from public.challenges c
-   where c.id = new.challenge_id;
+   where c.id = v_challenge;
 
   if v_finalized then
     raise exception 'Challenge logs cannot change after finalization'
       using errcode = '42501';
   end if;
 
-  return new;
+  return coalesce(new, old);
 end;
 $$;
 
@@ -844,19 +1001,35 @@ create trigger challenge_logs_finalize_guard_tg
 revoke execute on function
   public.update_challenge_routine(uuid, jsonb),
   public.get_challenge_routine(uuid),
+  public.validate_challenge_routine(jsonb),
   public.refresh_challenge_logs_for_dates(uuid, date[]),
   public.calculate_block_overlap(text, text, text, text),
   public.match_challenge_block(jsonb, jsonb, date),
   public.challenge_logs_finalize_guard()
 from public, anon, authenticated;
 
+-- 0007 recreated these 0006 functions via drop/create, which resets them to
+-- the default PUBLIC execute grant. Restore 0006's posture.
+revoke execute on function
+  public.create_challenge(text, text, text, timestamptz, timestamptz, text, integer, integer),
+  public.challenge_join_internal(uuid, boolean),
+  public.challenge_scores(uuid, uuid),
+  public.finalize_challenges()
+from public, anon, authenticated;
+
 grant execute on function
   public.update_challenge_routine(uuid, jsonb),
-  public.get_challenge_routine(uuid)
+  public.get_challenge_routine(uuid),
+  public.create_challenge(text, text, text, timestamptz, timestamptz, text, integer, integer)
 to authenticated;
 
 grant execute on function
   public.refresh_challenge_logs_for_dates(uuid, date[])
+to service_role;
+
+grant execute on function
+  public.challenge_scores(uuid, uuid),
+  public.finalize_challenges()
 to service_role;
 
 grant execute on function

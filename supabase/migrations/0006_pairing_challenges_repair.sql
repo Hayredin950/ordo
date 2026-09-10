@@ -398,8 +398,6 @@ begin
   -- rolling window; a log tick or a single-date override moves one date.
   if (v_prev -> 'routine') is distinct from (p_state -> 'routine') then
     perform public.refresh_daily_scores(v_uid, current_date - 180, current_date);
-    -- Refresh challenge logs for the full rolling window
-    perform public.refresh_challenge_logs_for_dates(v_uid, generate_series(current_date - 180, current_date, '1 day'::interval)::date[]);
   else
     select array_agg(d) into v_days
       from (
@@ -408,9 +406,6 @@ begin
         select public.changed_date_keys(v_prev -> 'overrides', p_state -> 'overrides')
       ) touched;
     perform public.refresh_daily_scores(v_uid, coalesce(v_days, '{}'::date[]));
-    if v_days is not null and array_length(v_days, 1) > 0 then
-      perform public.refresh_challenge_logs_for_dates(v_uid, v_days);
-    end if;
   end if;
 end;
 $$;
@@ -1678,10 +1673,7 @@ revoke execute on function
   public.get_challenge_breakdown(uuid),
   public.challenge_score(uuid, uuid),
   public.challenge_status(timestamptz, timestamptz, timestamptz),
-  public.weekly_pct(uuid),
-  public.update_challenge_routine(uuid, jsonb),
-  public.get_challenge_routine(uuid),
-  public.refresh_challenge_logs_for_dates(uuid, date[])
+  public.weekly_pct(uuid)
 from public, anon, authenticated;
 
 grant execute on function
