@@ -59,8 +59,7 @@ function SettingsPage() {
 
   if (!state) return <div className="min-h-dvh" aria-busy="true" />;
 
-  const { hourFormat, soundEnabled, alarmSound, alarmVibrate, customTimerMinutes } =
-    settingsOf(state);
+  const { hourFormat, soundEnabled, alarmSound, alarmVibrate } = settingsOf(state);
 
   const updateSetting = <K extends keyof typeof DEFAULT_SETTINGS>(
     key: K,
@@ -178,29 +177,6 @@ function SettingsPage() {
                 />
               </>
             )}
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center gap-4">
-                <Clock className="size-[22px] shrink-0 text-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">Default Timer</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {customTimerMinutes} minute{customTimerMinutes !== 1 ? "s" : ""}
-                  </p>
-                </div>
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={180}
-                value={customTimerMinutes}
-                onChange={(e) => updateSetting("customTimerMinutes", Number(e.target.value))}
-                className="mt-3 w-full accent-primary"
-              />
-              <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-                <span>1 min</span>
-                <span>3 h</span>
-              </div>
-            </div>
           </Section>
 
           <Section

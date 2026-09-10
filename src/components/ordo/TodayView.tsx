@@ -234,7 +234,7 @@ export function TodayView({
 
         <TelegramPanel hourFormat={hourFormat} />
 
-        <FocusTimer state={state} />
+        <FocusTimer state={state} update={update} />
       </div>
     </div>
   );

@@ -11,8 +11,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Play, Pause, RotateCcw, Timer, Plus, X } from "lucide-react";
-import type { AlarmSound, OrdoState } from "@/lib/ordo";
-import { settingsOf } from "@/lib/ordo";
+import { DEFAULT_SETTINGS, settingsOf, type AlarmSound, type OrdoState } from "@/lib/ordo";
 
 /* ------------------------------------------------------------------ */
 /*  Alarm sound generators (Web Audio API – no asset files needed)     */
@@ -146,7 +145,13 @@ const BUILTINS: TimerPreset[] = [
   { id: "short", label: "Short", minutes: 15 },
 ];
 
-export function FocusTimer({ state }: { state: OrdoState | null }) {
+export function FocusTimer({
+  state,
+  update,
+}: {
+  state: OrdoState | null;
+  update: (fn: (s: OrdoState) => OrdoState) => void;
+}) {
   const settings = settingsOf(state);
   const { soundEnabled, alarmSound, alarmVibrate, customTimerMinutes } = settings;
 
@@ -214,6 +219,17 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
   const stopAlarm = () => {
     if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current);
     setAlarmActive(false);
+  };
+
+  const setCustomDuration = (minutes: number) => {
+    update((prev) => ({
+      ...prev,
+      settings: { ...DEFAULT_SETTINGS, ...prev.settings, customTimerMinutes: minutes },
+    }));
+    setTotal(minutes * 60);
+    setSecondsLeft(minutes * 60);
+    setRunning(false);
+    stopAlarm();
   };
 
   const select = (minutes: number) => {
@@ -321,6 +337,24 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
             </Button>
           </div>
         )}
+        <div className="px-1 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Duration</span>
+            <span className="text-xs font-medium tabular-nums">{customTimerMinutes} min</span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={180}
+            value={customTimerMinutes}
+            onChange={(e) => setCustomDuration(Number(e.target.value))}
+            className="mt-1 w-full accent-primary"
+          />
+          <div className="mt-0.5 flex justify-between text-[10px] text-muted-foreground">
+            <span>1 min</span>
+            <span>3 h</span>
+          </div>
+        </div>
         <div className="flex flex-col items-center gap-3 py-2">
           <div className="relative flex size-32 items-center justify-center sm:size-36">
             <svg viewBox="0 0 144 144" className="size-full -rotate-90" aria-hidden>
