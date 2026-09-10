@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import { DEFAULT_SETTINGS, settingsOf } from "@/lib/ordo";
+import { DEFAULT_SETTINGS, settingsOf, type AlarmSound } from "@/lib/ordo";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
 import { useAuth } from "@/lib/auth-context";
 import * as db from "@/lib/db";
@@ -27,6 +27,8 @@ import {
   LogOut,
   RotateCcw,
   Trash2,
+  Volume2,
+  Vibrate,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,23 +59,38 @@ function SettingsPage() {
 
   if (!state) return <div className="min-h-dvh" aria-busy="true" />;
 
-  const { hourFormat, soundEnabled } = settingsOf(state);
+  const { hourFormat, soundEnabled, alarmSound, alarmVibrate, customTimerMinutes } =
+    settingsOf(state);
+
+  const updateSetting = <K extends keyof typeof DEFAULT_SETTINGS>(
+    key: K,
+    value: (typeof DEFAULT_SETTINGS)[K],
+  ) => {
+    update((prev) => ({
+      ...prev,
+      settings: { ...DEFAULT_SETTINGS, ...prev.settings, [key]: value },
+    }));
+  };
 
   const toggleHourFormat = () => {
     const next = hourFormat === "24h" ? "12h" : "24h";
-    update((prev) => ({
-      ...prev,
-      settings: { ...DEFAULT_SETTINGS, ...prev.settings, hourFormat: next },
-    }));
+    updateSetting("hourFormat", next);
     toast.success(next === "24h" ? "Times now show as 24-hour" : "Times now show as AM/PM");
   };
 
   const toggleSound = () => {
-    update((prev) => ({
-      ...prev,
-      settings: { ...DEFAULT_SETTINGS, ...prev.settings, soundEnabled: !soundEnabled },
-    }));
+    updateSetting("soundEnabled", !soundEnabled);
     toast.success(soundEnabled ? "Alarm sounds off" : "Alarm sounds on");
+  };
+
+  const setAlarmSound = (sound: AlarmSound) => {
+    updateSetting("alarmSound", sound);
+    toast.success(`Alarm sound: ${sound}`);
+  };
+
+  const toggleVibrate = () => {
+    updateSetting("alarmVibrate", !alarmVibrate);
+    toast.success(alarmVibrate ? "Vibration off" : "Vibration on");
   };
 
   const deleteAccount = async () => {
@@ -120,9 +137,70 @@ function SettingsPage() {
             <SettingsTile
               icon={soundEnabled ? AlarmClock : AlarmClockOff}
               title="Timer Alarm"
-              subtitle={soundEnabled ? "Beep when a session ends" : "Off"}
+              subtitle={soundEnabled ? "Sound when a session ends" : "Off"}
               onClick={toggleSound}
             />
+            {soundEnabled && (
+              <>
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-4">
+                    <Volume2 className="size-[22px] shrink-0 text-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">Alarm Sound</p>
+                      <p className="mt-0.5 text-xs capitalize text-muted-foreground">
+                        {alarmSound}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-4 gap-2">
+                    {(["chime", "bell", "beep", "soft"] as AlarmSound[]).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setAlarmSound(s)}
+                        className={cn(
+                          "tap rounded-lg border px-3 py-2 text-xs font-medium capitalize transition-colors",
+                          alarmSound === s
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:bg-accent/40",
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <SettingsTile
+                  icon={Vibrate}
+                  title="Vibrate"
+                  subtitle={alarmVibrate ? "Vibrate on finish" : "Off"}
+                  onClick={toggleVibrate}
+                />
+              </>
+            )}
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center gap-4">
+                <Clock className="size-[22px] shrink-0 text-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">Default Timer</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {customTimerMinutes} minute{customTimerMinutes !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={180}
+                value={customTimerMinutes}
+                onChange={(e) => updateSetting("customTimerMinutes", Number(e.target.value))}
+                className="mt-3 w-full accent-primary"
+              />
+              <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                <span>1 min</span>
+                <span>3 h</span>
+              </div>
+            </div>
           </Section>
 
           <Section

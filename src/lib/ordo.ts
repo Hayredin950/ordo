@@ -10,12 +10,23 @@ export type { CategoryId };
 /** How the app prints a wall-clock time. Chosen by the user, stored per account. */
 export type HourFormat = "24h" | "12h";
 
+export type AlarmSound = "chime" | "bell" | "beep" | "soft";
+
 export type Settings = {
   hourFormat: HourFormat;
   soundEnabled: boolean;
+  alarmSound: AlarmSound;
+  alarmVibrate: boolean;
+  customTimerMinutes: number;
 };
 
-export const DEFAULT_SETTINGS: Settings = { hourFormat: "24h", soundEnabled: true };
+export const DEFAULT_SETTINGS: Settings = {
+  hourFormat: "24h",
+  soundEnabled: true,
+  alarmSound: "chime",
+  alarmVibrate: true,
+  customTimerMinutes: 25,
+};
 
 /**
  * First-run guess from the browser's own locale, so an en-US visitor sees

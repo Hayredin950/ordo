@@ -1,20 +1,123 @@
 import { useEffect, useRef, useState } from "react";
 import { Panel, PanelTitle, ScrollRow, SegButton } from "./primitives";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Play, Pause, RotateCcw, Timer, Plus, X } from "lucide-react";
-import type { OrdoState } from "@/lib/ordo";
+import type { AlarmSound, OrdoState } from "@/lib/ordo";
+import { settingsOf } from "@/lib/ordo";
+
+/* ------------------------------------------------------------------ */
+/*  Alarm sound generators (Web Audio API – no asset files needed)     */
+/* ------------------------------------------------------------------ */
+
+type AlarmFn = (ctx: AudioContext) => void;
+
+const alarmChime: AlarmFn = (ctx) => {
+  const t = ctx.currentTime;
+  const notes = [523, 659, 784, 1047];
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.25, t + i * 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.18 + 0.4);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t + i * 0.18);
+    osc.stop(t + i * 0.18 + 0.4);
+  });
+};
+
+const alarmBell: AlarmFn = (ctx) => {
+  const t = ctx.currentTime;
+  [880, 1175, 880].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.3, t + i * 0.25);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.25 + 0.35);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t + i * 0.25);
+    osc.stop(t + i * 0.25 + 0.35);
+  });
+};
+
+const alarmBeep: AlarmFn = (ctx) => {
+  const t = ctx.currentTime;
+  for (let i = 0; i < 3; i++) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 1000;
+    gain.gain.setValueAtTime(0.2, t + i * 0.3);
+    gain.gain.setValueAtTime(0.001, t + i * 0.3 + 0.15);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t + i * 0.3);
+    osc.stop(t + i * 0.3 + 0.15);
+  }
+};
+
+const alarmSoft: AlarmFn = (ctx) => {
+  const t = ctx.currentTime;
+  [440, 554, 659, 880].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.2, t + i * 0.2 + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.2 + 0.5);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t + i * 0.2);
+    osc.stop(t + i * 0.2 + 0.5);
+  });
+};
+
+const ALARM_FNS: Record<AlarmSound, AlarmFn> = {
+  chime: alarmChime,
+  bell: alarmBell,
+  beep: alarmBeep,
+  soft: alarmSoft,
+};
+
+function playAlarmSound(sound: AlarmSound) {
+  try {
+    const ctx = new (
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    )();
+    ALARM_FNS[sound](ctx);
+  } catch {
+    /* audio not available */
+  }
+}
+
+function vibrate(pattern: number[]) {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* not available */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Custom presets (localStorage)                                      */
+/* ------------------------------------------------------------------ */
 
 interface TimerPreset {
   id: string;
   label: string;
   minutes: number;
 }
-
-const PRESETS: TimerPreset[] = [
-  { id: "deep", label: "Deep work", minutes: 50 },
-  { id: "standard", label: "Standard", minutes: 25 },
-  { id: "short", label: "Short", minutes: 15 },
-];
 
 const CUSTOM_PRESETS_KEY = "ordo.focus-presets.v1";
 
@@ -33,42 +136,32 @@ function saveCustomPresets(presets: TimerPreset[]) {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-function playAlarm() {
-  try {
-    const ctx = new (
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    )();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.15);
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.3);
-    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.45);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.6);
-  } catch {
-    /* audio not available */
-  }
-}
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
 
-const DEFAULT_TOTAL = 25 * 60;
+const BUILTINS: TimerPreset[] = [
+  { id: "deep", label: "Deep work", minutes: 50 },
+  { id: "standard", label: "Standard", minutes: 25 },
+  { id: "short", label: "Short", minutes: 15 },
+];
 
 export function FocusTimer({ state }: { state: OrdoState | null }) {
-  const [total, setTotal] = useState(DEFAULT_TOTAL);
-  const [secondsLeft, setSecondsLeft] = useState(DEFAULT_TOTAL);
+  const settings = settingsOf(state);
+  const { soundEnabled, alarmSound, alarmVibrate, customTimerMinutes } = settings;
+
+  const [total, setTotal] = useState(customTimerMinutes * 60);
+  const [secondsLeft, setSecondsLeft] = useState(customTimerMinutes * 60);
   const [running, setRunning] = useState(false);
   const [customPresets, setCustomPresets] = useState<TimerPreset[]>(loadCustomPresets);
   const [showAdd, setShowAdd] = useState(false);
   const [newMinutes, setNewMinutes] = useState("25");
+  const [alarmActive, setAlarmActive] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const soundEnabled = state?.settings?.soundEnabled ?? true;
+  const alarmIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const alarmStartRef = useRef<number>(0);
 
+  /* ---- timer tick ---- */
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => {
@@ -86,16 +179,46 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
     };
   }, [running]);
 
+  /* ---- trigger alarm when timer hits zero ---- */
   useEffect(() => {
-    if (!running && secondsLeft === 0 && total > 0) {
+    if (!running && secondsLeft === 0 && total > 0 && !alarmActive) {
       if (soundEnabled) {
-        playAlarm();
+        playAlarmSound(alarmSound);
+        alarmStartRef.current = Date.now();
+        setAlarmActive(true);
+
+        /* re-play every ~4s for up to 60s, then auto-stop */
+        alarmIntervalRef.current = setInterval(() => {
+          const elapsed = Date.now() - alarmStartRef.current;
+          if (elapsed >= 60_000) {
+            clearInterval(alarmIntervalRef.current!);
+            setAlarmActive(false);
+            return;
+          }
+          playAlarmSound(alarmSound);
+        }, 4000);
+      }
+      if (alarmVibrate) {
+        vibrate([200, 100, 200, 100, 200]);
       }
     }
-  }, [secondsLeft, running, total, soundEnabled]);
+  }, [secondsLeft, running, total, soundEnabled, alarmSound, alarmVibrate, alarmActive]);
+
+  /* cleanup alarm interval on unmount */
+  useEffect(() => {
+    return () => {
+      if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current);
+    };
+  }, []);
+
+  const stopAlarm = () => {
+    if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current);
+    setAlarmActive(false);
+  };
 
   const select = (minutes: number) => {
     setRunning(false);
+    stopAlarm();
     setTotal(minutes * 60);
     setSecondsLeft(minutes * 60);
   };
@@ -103,8 +226,6 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
   const addPreset = () => {
     const minutes = parseInt(newMinutes, 10);
     if (isNaN(minutes) || minutes <= 0) return;
-    // Adding a duration that is already on the row would give two identical
-    // chips, so select the existing one instead of stacking a duplicate.
     const existing = customPresets.find((p) => p.minutes === minutes);
     if (existing) {
       select(minutes);
@@ -135,132 +256,143 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
   const circumference = 2 * Math.PI * r;
 
   return (
-    <Panel>
-      <PanelTitle title="Focus timer" />
-      <p className="text-xs text-muted-foreground px-1">
-        One block at a time — the timer is the task.
-      </p>
-      {/* `justify-end` must not go on this row: it is an overflow-x:auto flex
-          container, and flex-end makes content overflow past the *start* edge,
-          which browsers will not let you scroll back to. Once a few custom
-          presets existed, the earlier chips were pushed off the left and became
-          permanently unreachable. An auto margin on the first chip right-aligns
-          the group when it fits and collapses to 0 when it does not. */}
-      <ScrollRow>
-        {PRESETS.map((p) => (
-          <SegButton
-            key={p.id}
-            active={total === p.minutes * 60}
-            className="px-2.5 py-1.5 text-[11px] sm:py-1 sm:first:ml-auto"
-            onClick={() => select(p.minutes)}
-          >
-            {p.label}
-          </SegButton>
-        ))}
-        {customPresets.map((p) => (
-          // `scroll-row-item` is what SegButton already carries: flex:none, so
-          // the chip keeps its width instead of being squeezed to nothing as
-          // siblings are added. Without it each new preset shrank all the others.
-          <span
-            key={p.id}
-            className="scroll-row-item inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-1 text-[11px]"
-          >
+    <>
+      <Panel>
+        <PanelTitle title="Focus timer" />
+        <p className="text-xs text-muted-foreground px-1">
+          One block at a time — the timer is the task.
+        </p>
+        <ScrollRow>
+          {BUILTINS.map((p) => (
             <SegButton
+              key={p.id}
               active={total === p.minutes * 60}
-              className="px-2 py-1.5 text-[11px] sm:py-1"
+              className="px-2.5 py-1.5 text-[11px] sm:py-1 sm:first:ml-auto"
               onClick={() => select(p.minutes)}
             >
-              {/* Rendered from `minutes`, not the stored label: "Custom N" was
-                  numbered from the list length, so deleting one made the next
-                  one reuse a name that was already taken. */}
-              {p.minutes}m
+              {p.label}
             </SegButton>
-            <button
-              type="button"
-              onClick={() => removePreset(p.id)}
-              className="ml-0.5 rounded-full p-1 hover:bg-accent hover:text-foreground"
-              aria-label={`Remove the ${p.minutes}-minute preset`}
+          ))}
+          {customPresets.map((p) => (
+            <span
+              key={p.id}
+              className="scroll-row-item inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-1 text-[11px]"
             >
-              <X className="size-2.5" />
-            </button>
-          </span>
-        ))}
-        <SegButton
-          active={false}
-          className="px-2 py-1.5 text-[11px] sm:py-1"
-          onClick={() => setShowAdd(!showAdd)}
-        >
-          <Plus className="mr-0.5 size-3 inline" /> Customize
-        </SegButton>
-      </ScrollRow>
-      {showAdd && (
-        <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center">
-          <input
-            type="number"
-            placeholder="Minutes"
-            value={newMinutes}
-            onChange={(e) => setNewMinutes(e.target.value)}
-            min={1}
-            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring sm:w-20"
-          />
-          <Button size="sm" onClick={addPreset}>
-            <Plus className="mr-1 size-3" /> Save
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setShowAdd(false)}>
-            <X className="size-3" />
-          </Button>
-        </div>
-      )}
-      <div className="flex flex-col items-center gap-3 py-2">
-        <div className="relative flex size-32 items-center justify-center sm:size-36">
-          <svg viewBox="0 0 144 144" className="size-full -rotate-90" aria-hidden>
-            <circle cx={72} cy={72} r={r} fill="none" stroke="var(--border)" strokeWidth={8} />
-            <circle
-              cx={72}
-              cy={72}
-              r={r}
-              fill="none"
-              stroke="var(--primary)"
-              strokeWidth={8}
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference * Math.min(1, Math.max(0, elapsed))}
-              style={{ transition: "stroke-dashoffset 1s linear" }}
+              <SegButton
+                active={total === p.minutes * 60}
+                className="px-2 py-1.5 text-[11px] sm:py-1"
+                onClick={() => select(p.minutes)}
+              >
+                {p.minutes}m
+              </SegButton>
+              <button
+                type="button"
+                onClick={() => removePreset(p.id)}
+                className="ml-0.5 rounded-full p-1 hover:bg-accent hover:text-foreground"
+                aria-label={`Remove the ${p.minutes}-minute preset`}
+              >
+                <X className="size-2.5" />
+              </button>
+            </span>
+          ))}
+          <SegButton
+            active={false}
+            className="px-2 py-1.5 text-[11px] sm:py-1"
+            onClick={() => setShowAdd(!showAdd)}
+          >
+            <Plus className="mr-0.5 size-3 inline" /> Customize
+          </SegButton>
+        </ScrollRow>
+        {showAdd && (
+          <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center">
+            <input
+              type="number"
+              placeholder="Minutes"
+              value={newMinutes}
+              onChange={(e) => setNewMinutes(e.target.value)}
+              min={1}
+              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring sm:w-20"
             />
-          </svg>
-          <div
-            className="absolute font-display text-3xl font-bold tabular-nums"
-            role="timer"
-            aria-live="off"
-          >
-            {mm}:{ss}
+            <Button size="sm" onClick={addPreset}>
+              <Plus className="mr-1 size-3" /> Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowAdd(false)}>
+              <X className="size-3" />
+            </Button>
           </div>
+        )}
+        <div className="flex flex-col items-center gap-3 py-2">
+          <div className="relative flex size-32 items-center justify-center sm:size-36">
+            <svg viewBox="0 0 144 144" className="size-full -rotate-90" aria-hidden>
+              <circle cx={72} cy={72} r={r} fill="none" stroke="var(--border)" strokeWidth={8} />
+              <circle
+                cx={72}
+                cy={72}
+                r={r}
+                fill="none"
+                stroke="var(--primary)"
+                strokeWidth={8}
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * Math.min(1, Math.max(0, elapsed))}
+                style={{ transition: "stroke-dashoffset 1s linear" }}
+              />
+            </svg>
+            <div
+              className="absolute font-display text-3xl font-bold tabular-nums"
+              role="timer"
+              aria-live="off"
+            >
+              {mm}:{ss}
+            </div>
+          </div>
+          <div className="flex w-full gap-2 sm:w-auto">
+            <Button
+              size="sm"
+              className="tap flex-1 sm:flex-none"
+              onClick={() => setRunning((on) => !on)}
+            >
+              {running ? <Pause className="mr-1 size-4" /> : <Play className="mr-1 size-4" />}
+              {running ? "Pause" : secondsLeft === 0 ? "Restart" : "Start"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="tap flex-1 sm:flex-none"
+              onClick={() => {
+                setRunning(false);
+                stopAlarm();
+                setSecondsLeft(total);
+              }}
+            >
+              <RotateCcw className="mr-1 size-4" /> Reset
+            </Button>
+          </div>
+          <p className="flex items-center gap-1.5 text-center text-xs text-muted-foreground">
+            <Timer className="size-3.5 shrink-0" /> Log the linked block when it's done.
+          </p>
         </div>
-        <div className="flex w-full gap-2 sm:w-auto">
-          <Button
-            size="sm"
-            className="tap flex-1 sm:flex-none"
-            onClick={() => setRunning((on) => !on)}
-          >
-            {running ? <Pause className="mr-1 size-4" /> : <Play className="mr-1 size-4" />}
-            {running ? "Pause" : secondsLeft === 0 ? "Restart" : "Start"}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="tap flex-1 sm:flex-none"
-            onClick={() => {
-              setRunning(false);
-              setSecondsLeft(total);
-            }}
-          >
-            <RotateCcw className="mr-1 size-4" /> Reset
-          </Button>
-        </div>
-        <p className="flex items-center gap-1.5 text-center text-xs text-muted-foreground">
-          <Timer className="size-3.5 shrink-0" /> Log the linked block when it's done.
-        </p>
-      </div>
-    </Panel>
+      </Panel>
+
+      {/* Stop Alarm overlay — auto-plays for up to 60 s, user clicks to silence */}
+      <AlertDialog
+        open={alarmActive}
+        onOpenChange={(open) => {
+          if (!open) stopAlarm();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Timer finished</AlertDialogTitle>
+            <AlertDialogDescription>
+              The alarm will stop on its own in under a minute, or tap below to silence it now.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={stopAlarm}>Stop Alarm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
