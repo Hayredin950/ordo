@@ -17,7 +17,6 @@ import { RoutineView } from "@/components/ordo/RoutineView";
 import { GoalsView } from "@/components/ordo/GoalsView";
 import { InsightsView } from "@/components/ordo/InsightsView";
 import { CommunityView } from "@/components/ordo/CommunityView";
-import { PreferencesPanel } from "@/components/ordo/PreferencesPanel";
 import { AnnouncementBanner } from "@/components/ordo/AnnouncementBanner";
 import { OnboardingChecklist } from "@/components/ordo/OnboardingChecklist";
 import { Toaster } from "@/components/ui/sonner";
@@ -140,12 +139,7 @@ function OrdoApp() {
         {tab === "Routine" ? <RoutineView state={state} update={update} /> : null}
         {tab === "Goals" ? <GoalsView state={state} update={update} /> : null}
         {tab === "Insights" ? <InsightsView state={state} /> : null}
-        {tab === "Community" ? (
-          <div className="space-y-4 sm:space-y-5">
-            <PreferencesPanel state={state} update={update} />
-            <CommunityView />
-          </div>
-        ) : null}
+        {tab === "Community" ? <CommunityView /> : null}
       </AppShell>
     </>
   );

@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-foreground: var(--foreground);
+  
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  
+  --color-cat-health: var(--cat-health);
+  --color-cat-study: var(--cat-study);
+  --color-cat-work: var(--cat-work);
+  --color-cat-finance: var(--cat-finance);
+  --color-cat-spiritual: var(--cat-spiritual);
+  --color-cat-relationships: var(--cat-relationships);
+}
+
+:root {
+  /* Dark theme only — no light palette */
+  /* Palette: amber primary + navy surfaces + per-status accent (amber/neutral/red) */
+  --background: #080d1a;
+  --surface: #0f172a;
+  --surface-hover: #162035;
+  --surface-elevated: #1c2842;
+  --card: #0f172a;
+  --card-hover: #141f36;
+  --border: #1e293b;
+  --border-subtle: #152238;
+
+  /* Amber primary */
+  --primary: #f59e0b;
+  --primary-hover: #fbbf24;
+  --primary-foreground: #090e1a;
+
+  /* Muted & Text */
+  --muted: #17243b;
+  --muted-foreground: #94a3b8;
+  --foreground: #f8fafc;
+
+  /* Destructive */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Category colors (exact OKLCH specified by user) */
+  --cat-health: oklch(0.75 0.16 150);
+  --cat-study: oklch(0.72 0.15 250);
+  --cat-work: oklch(0.75 0.16 62);
+  --cat-finance: oklch(0.78 0.15 100);
+  --cat-spiritual: oklch(0.72 0.14 310);
+  --cat-relationships: oklch(0.72 0.16 15);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}

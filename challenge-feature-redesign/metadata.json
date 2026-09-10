@@ -1,0 +1,6 @@
+{
+  "name": "Challenge Feature Redesign",
+  "description": "A comprehensive redesign of the Challenge feature featuring quick-glance status cards, state variants, detailed views, and 3-step routine wizard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

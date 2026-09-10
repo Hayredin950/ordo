@@ -8,8 +8,6 @@ import type {
   ChallengeBreakdown,
   ChallengeRoutine,
   ChallengeStatus,
-  PairingRequest,
-  Peer,
 } from "@/lib/db";
 import { useCategories } from "@/lib/categories";
 import { Panel, PanelTitle } from "./primitives";
@@ -17,18 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
-  UserPlus,
-  Users,
   Trophy,
-  Trash2,
   ChevronDown,
   ChevronUp,
   Loader2,
   Flag,
-  Check,
-  X,
-  MailWarning,
-  Send,
   Copy,
   KeyRound,
   Lock,
@@ -59,91 +50,6 @@ const errMsg = (err: unknown, fallback: string) => (err instanceof Error ? err.m
 export function CommunityView() {
   const { user } = useAuth();
   const { categories } = useCategories();
-
-  // ---- Accountability pairing ----
-  const [peers, setPeers] = useState<Peer[] | null>(null);
-  const [pairEmail, setPairEmail] = useState("");
-  const [pairBusy, setPairBusy] = useState(false);
-  const [requests, setRequests] = useState<PairingRequest[]>([]);
-  const [reqBusy, setReqBusy] = useState<string | null>(null);
-
-  const loadPeers = useCallback(async () => {
-    if (!user) return;
-    try {
-      setPeers(await db.listPeers());
-    } catch {
-      setPeers([]);
-    }
-  }, [user]);
-
-  /**
-   * Both directions come from one RPC. This used to read `pairing_requests`
-   * directly and select a `requester_email` column that has never existed, so
-   * every pending invite rendered as a blank row; the table is RLS-locked now.
-   */
-  const loadRequests = useCallback(async () => {
-    if (!user) return;
-    try {
-      setRequests(await db.listPairingRequests());
-    } catch {
-      setRequests([]);
-    }
-  }, [user]);
-
-  const addPair = async () => {
-    if (!pairEmail.trim()) return;
-    setPairBusy(true);
-    try {
-      await db.pairWithEmail(pairEmail.trim());
-      // Deliberately the same message whether or not that address has an
-      // account: anything else turns this box into an account-enumeration probe.
-      toast.success("Invite sent — they have to accept before either of you sees anything.");
-      setPairEmail("");
-      void loadRequests();
-    } catch (err) {
-      toast.error(errMsg(err, "Could not send that invite"));
-    } finally {
-      setPairBusy(false);
-    }
-  };
-
-  const respondRequest = async (id: string, response: "accept" | "decline") => {
-    setReqBusy(id);
-    try {
-      await db.respondToPairingRequest(id, response);
-      toast.success(response === "accept" ? "Paired." : "Invite declined.");
-      setRequests((rs) => rs.filter((r) => r.id !== id));
-      void loadPeers();
-    } catch (err) {
-      toast.error(errMsg(err, "Could not respond"));
-      void loadRequests();
-    } finally {
-      setReqBusy(null);
-    }
-  };
-
-  const withdrawRequest = async (id: string) => {
-    setReqBusy(id);
-    try {
-      await db.cancelPairingRequest(id);
-      setRequests((rs) => rs.filter((r) => r.id !== id));
-      toast.success("Invite withdrawn");
-    } catch (err) {
-      toast.error(errMsg(err, "Could not withdraw that invite"));
-    } finally {
-      setReqBusy(null);
-    }
-  };
-
-  const removePair = async (peerId: string) => {
-    try {
-      await db.unpairUser(peerId);
-      setPeers((ps) => (ps ? ps.filter((p) => p.id !== peerId) : ps));
-      toast.success("Pairing removed");
-    } catch (err) {
-      toast.error(errMsg(err, "Could not remove pairing"));
-    }
-  };
 
   // ---- Challenges ----
   const [challenges, setChallenges] = useState<Challenge[] | null>(null);
@@ -180,10 +86,8 @@ export function CommunityView() {
   }, [user]);
 
   useEffect(() => {
-    void loadPeers();
-    void loadRequests();
     void loadChallenges();
-  }, [loadPeers, loadRequests, loadChallenges]);
+  }, [loadChallenges]);
 
   const loadBoard = useCallback(async (id: string) => {
     setBoardBusy(true);
@@ -341,160 +245,19 @@ export function CommunityView() {
   if (!user) {
     return (
       <Panel>
-        <PanelTitle title="Community" hint="Pair with a friend or join a challenge." />
+        <PanelTitle
+          title="Community"
+          hint="Join a challenge and publish your discipline to the leaderboard."
+        />
         <p className="text-sm text-muted-foreground">
-          Sign in to pair accounts, join challenges and publish your discipline to the leaderboard.
+          Sign in to join challenges and publish your discipline to the leaderboard.
         </p>
       </Panel>
     );
   }
 
-  const incoming = requests.filter((r) => r.direction === "incoming");
-  const outgoing = requests.filter((r) => r.direction === "outgoing");
-
   return (
     <div className="space-y-4 sm:space-y-5">
-      <Panel>
-        <PanelTitle
-          title="Accountability pairing"
-          hint="Each of you sees the other's weekly % — never task details."
-        />
-        {/* Stacked on a phone: an email field squeezed next to a button is too
-            narrow to read the address you just typed. */}
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            value={pairEmail}
-            type="email"
-            placeholder="friend@example.com"
-            onChange={(e) => setPairEmail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void addPair();
-            }}
-          />
-          <Button
-            size="sm"
-            className="tap w-full sm:w-auto sm:shrink-0"
-            disabled={pairBusy}
-            onClick={() => void addPair()}
-          >
-            {pairBusy ? (
-              <Loader2 className="mr-1 size-4 animate-spin" />
-            ) : (
-              <UserPlus className="mr-1 size-4" />
-            )}
-            Invite
-          </Button>
-        </div>
-
-        <div className="mt-3 space-y-2">
-          {incoming.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-foreground">Waiting on you</p>
-              {incoming.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
-                >
-                  <MailWarning className="size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate">{r.peer_name || r.peer_email}</div>
-                    {r.peer_name ? (
-                      <div className="truncate text-xs text-muted-foreground">{r.peer_email}</div>
-                    ) : null}
-                  </div>
-                  {reqBusy === r.id ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="tap"
-                        aria-label={`Accept pairing invite from ${r.peer_email}`}
-                        onClick={() => void respondRequest(r.id, "accept")}
-                      >
-                        <Check className="size-4 text-green-600" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="tap"
-                        aria-label={`Decline pairing invite from ${r.peer_email}`}
-                        onClick={() => void respondRequest(r.id, "decline")}
-                      >
-                        <X className="size-4 text-red-600" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {outgoing.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-foreground">Sent</p>
-              {outgoing.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex items-center gap-2 rounded-lg border border-dashed border-border p-3 text-sm"
-                >
-                  <Send className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                    {r.peer_email}
-                  </span>
-                  {reqBusy === r.id ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="tap shrink-0"
-                      onClick={() => void withdrawRequest(r.id)}
-                    >
-                      Withdraw
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {!peers?.length && requests.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No partners yet. Invite someone by email — they choose whether to accept.
-            </p>
-          ) : null}
-
-          {peers?.length
-            ? peers.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm sm:gap-3"
-                >
-                  <Users className="size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{p.name || p.email}</div>
-                    <div className="truncate text-xs text-muted-foreground">{p.email}</div>
-                  </div>
-                  <span className="shrink-0 rounded bg-muted px-2 py-1 font-display text-sm font-semibold tabular-nums">
-                    {p.weekly === null ? "—" : `${p.weekly}%`}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="tap -mr-1 shrink-0"
-                    aria-label={`Remove pairing with ${p.email}`}
-                    onClick={() => void removePair(p.id)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ))
-            : null}
-        </div>
-      </Panel>
-
       <Panel>
         <PanelTitle
           title="Challenges"
