@@ -34,6 +34,7 @@ export function ChallengeHub() {
   const [editingChallenge, setEditingChallenge] = useState<ChallengeCardModel | null>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [createdChallengeName, setCreatedChallengeName] = useState<string | undefined>();
+  const [createdInviteCode, setCreatedInviteCode] = useState<string | undefined>();
 
   const loadChallenges = useCallback(async () => {
     if (!user) {
@@ -139,11 +140,13 @@ export function ChallengeHub() {
 
       // Save routine if schedule has blocks
       const totalBlocks = draft.schedule.reduce((acc, s) => acc + s.blocks.length, 0);
+      let inviteCode: string | null = null;
       if (totalBlocks > 0) {
         // We need to find the newly created challenge to save its routine
         const rows = await db.listChallenges();
         const newest = rows.find((r) => r.name === draft.name.trim() && r.is_owner);
         if (newest) {
+          inviteCode = newest.invite_code;
           const routineByDay: Record<number, Block[]> = {};
           for (const day of draft.schedule) {
             routineByDay[day.dayOfWeek] = day.blocks.map((b) => ({
@@ -157,10 +160,19 @@ export function ChallengeHub() {
           }
           await db.updateChallengeRoutine(newest.id, routineByDay);
         }
+      } else {
+        const rows = await db.listChallenges();
+        const newest = rows.find((r) => r.name === draft.name.trim() && r.is_owner);
+        if (newest) inviteCode = newest.invite_code;
       }
 
       setCreatedChallengeName(draft.name.trim());
-      toast.success("Created — you are the first member.");
+      setCreatedInviteCode(inviteCode ?? undefined);
+      toast.success(
+        draft.visibility === "private"
+          ? "Created. Share the invite code to let people in."
+          : "Created — you are the first member.",
+      );
       await loadChallenges();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the challenge");
@@ -236,6 +248,7 @@ export function ChallengeHub() {
           type="button"
           onClick={() => {
             setCreatedChallengeName(undefined);
+            setCreatedInviteCode(undefined);
             setIsWizardOpen(true);
           }}
           className="min-h-[40px] px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-primary-foreground font-bold text-xs tracking-wide shadow-xs flex items-center gap-1.5 transition-colors"
@@ -356,6 +369,7 @@ export function ChallengeHub() {
             void handleCreateChallenge(draft);
           }}
           createdChallengeName={createdChallengeName}
+          createdInviteCode={createdInviteCode}
         />
       )}
     </div>

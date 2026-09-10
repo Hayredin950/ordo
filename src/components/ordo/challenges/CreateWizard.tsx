@@ -10,6 +10,7 @@ interface Props {
   onClose: () => void;
   onCreateChallenge: (draft: ChallengeDraft) => void;
   createdChallengeName?: string | undefined;
+  createdInviteCode?: string | undefined;
   onOpenCardDetail?: () => void;
 }
 
@@ -31,6 +32,7 @@ export function CreateChallengeWizard({
   onClose,
   onCreateChallenge,
   createdChallengeName,
+  createdInviteCode,
   onOpenCardDetail,
 }: Props) {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
@@ -166,6 +168,8 @@ export function CreateChallengeWizard({
           {currentStep === 4 && (
             <ChallengeCreatedSuccess
               challengeName={createdChallengeName ?? draft.name}
+              visibility={draft.visibility}
+              inviteCode={createdInviteCode ?? null}
               onOpenCardDetail={onOpenCardDetail ?? onClose}
               onDone={onClose}
             />

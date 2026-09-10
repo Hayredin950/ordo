@@ -61,6 +61,42 @@ export function ChallengeBasicsStep({ draft, onChange, errors }: Props) {
 
       <div>
         <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+          Visibility <span className="text-destructive">*</span>
+        </label>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={() => onChange({ visibility: "public" })}
+            className={`p-3 rounded-xl border text-left transition-all ${
+              draft.visibility === "public"
+                ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
+                : "border-border bg-surface-elevated hover:border-border/80 text-foreground"
+            }`}
+          >
+            <div className="text-xs font-bold text-foreground">Public</div>
+            <div className="text-[10px] mt-0.5 text-muted-foreground">
+              Anyone in the community can discover and join
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ visibility: "private" })}
+            className={`p-3 rounded-xl border text-left transition-all ${
+              draft.visibility === "private"
+                ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
+                : "border-border bg-surface-elevated hover:border-border/80 text-foreground"
+            }`}
+          >
+            <div className="text-xs font-bold text-foreground">Private</div>
+            <div className="text-[10px] mt-0.5 text-muted-foreground">
+              Invite code only — share to let people in
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
           Category Color Palette <span className="text-destructive">*</span>
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">

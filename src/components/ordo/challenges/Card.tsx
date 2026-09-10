@@ -1,4 +1,6 @@
-import { Lock, Info, AlertTriangle, RefreshCw } from "lucide-react";
+import { Lock, Info, AlertTriangle, RefreshCw, Copy, Check } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { ChallengeCardHeader } from "./CardHeader";
 import { ChallengeScore } from "./Score";
 import { ChallengeProgress } from "./Progress";
@@ -31,6 +33,18 @@ export function ChallengeCard({
   onOpenLeaderboard,
   onEditRoutine,
 }: Props) {
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  const handleCopyCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCodeCopied(true);
+      toast.success(`Copied ${code}`);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy — the code is shown beside the button.");
+    }
+  };
   if (isLoading) {
     return (
       <div
@@ -176,6 +190,24 @@ export function ChallengeCard({
         onSecondaryAction={memberCount > 0 ? () => onOpenLeaderboard?.(challenge) : undefined}
         onEditRoutine={() => onEditRoutine?.(challenge)}
       />
+
+      {isCreator && challenge.inviteCode && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleCopyCode(challenge.inviteCode!);
+          }}
+          className="w-full min-h-[36px] px-3 py-1.5 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground border border-border font-mono text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+        >
+          {codeCopied ? (
+            <Check className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+          ) : (
+            <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+          )}
+          <span>{challenge.inviteCode}</span>
+        </button>
+      )}
     </div>
   );
 }
