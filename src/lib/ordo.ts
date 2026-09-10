@@ -17,7 +17,6 @@ export type Settings = {
   soundEnabled: boolean;
   alarmSound: AlarmSound;
   alarmVibrate: boolean;
-  customTimerMinutes: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -25,7 +24,6 @@ export const DEFAULT_SETTINGS: Settings = {
   soundEnabled: true,
   alarmSound: "chime",
   alarmVibrate: true,
-  customTimerMinutes: 25,
 };
 
 /**

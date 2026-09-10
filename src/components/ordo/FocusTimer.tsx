@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Play, Pause, RotateCcw, Timer, Plus, X } from "lucide-react";
-import { DEFAULT_SETTINGS, settingsOf, type AlarmSound, type OrdoState } from "@/lib/ordo";
+import { settingsOf, type AlarmSound, type OrdoState } from "@/lib/ordo";
 
 /* ------------------------------------------------------------------ */
 /*  Alarm sound generators (Web Audio API – no asset files needed)     */
@@ -21,8 +21,7 @@ type AlarmFn = (ctx: AudioContext) => void;
 
 const alarmChime: AlarmFn = (ctx) => {
   const t = ctx.currentTime;
-  const notes = [523, 659, 784, 1047];
-  notes.forEach((freq, i) => {
+  [523, 659, 784, 1047].forEach((freq, i) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
@@ -109,6 +108,44 @@ function vibrate(pattern: number[]) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Timer persistence (survives tab switches)                          */
+/* ------------------------------------------------------------------ */
+
+interface TimerSnapshot {
+  total: number;
+  secondsLeft: number;
+  running: boolean;
+  savedAt: number;
+}
+
+const TIMER_KEY = "ordo.focus-timer.v1";
+const DEFAULT_TOTAL = 25 * 60;
+
+function loadTimer(): TimerSnapshot {
+  try {
+    const raw = localStorage.getItem(TIMER_KEY);
+    if (!raw)
+      return { total: DEFAULT_TOTAL, secondsLeft: DEFAULT_TOTAL, running: false, savedAt: 0 };
+    const snap = JSON.parse(raw) as TimerSnapshot;
+    if (snap.running && snap.savedAt > 0) {
+      const elapsedSec = Math.floor((Date.now() - snap.savedAt) / 1000);
+      snap.secondsLeft = Math.max(0, snap.secondsLeft - elapsedSec);
+      if (snap.secondsLeft <= 0) {
+        snap.secondsLeft = 0;
+        snap.running = false;
+      }
+    }
+    return snap;
+  } catch {
+    return { total: DEFAULT_TOTAL, secondsLeft: DEFAULT_TOTAL, running: false, savedAt: 0 };
+  }
+}
+
+function saveTimer(snap: TimerSnapshot) {
+  localStorage.setItem(TIMER_KEY, JSON.stringify({ ...snap, savedAt: Date.now() }));
+}
+
+/* ------------------------------------------------------------------ */
 /*  Custom presets (localStorage)                                      */
 /* ------------------------------------------------------------------ */
 
@@ -145,26 +182,52 @@ const BUILTINS: TimerPreset[] = [
   { id: "short", label: "Short", minutes: 15 },
 ];
 
-export function FocusTimer({
-  state,
-  update,
-}: {
-  state: OrdoState | null;
-  update: (fn: (s: OrdoState) => OrdoState) => void;
-}) {
+export function FocusTimer({ state }: { state: OrdoState | null }) {
   const settings = settingsOf(state);
-  const { soundEnabled, alarmSound, alarmVibrate, customTimerMinutes } = settings;
+  const { soundEnabled, alarmSound, alarmVibrate } = settings;
 
-  const [total, setTotal] = useState(customTimerMinutes * 60);
-  const [secondsLeft, setSecondsLeft] = useState(customTimerMinutes * 60);
-  const [running, setRunning] = useState(false);
+  const initial = loadTimer();
+  const [total, setTotal] = useState(initial.total);
+  const [secondsLeft, setSecondsLeft] = useState(initial.secondsLeft);
+  const [running, setRunning] = useState(initial.running);
   const [customPresets, setCustomPresets] = useState<TimerPreset[]>(loadCustomPresets);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newMinutes, setNewMinutes] = useState("25");
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState(25);
   const [alarmActive, setAlarmActive] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const alarmIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const alarmStartRef = useRef<number>(0);
+  const wasRunningRef = useRef(initial.running);
+
+  /* ---- persist timer on every change ---- */
+  useEffect(() => {
+    saveTimer({ total, secondsLeft, running, savedAt: Date.now() });
+  }, [total, secondsLeft, running]);
+
+  /* ---- trigger alarm if timer finished while user was away ---- */
+  useEffect(() => {
+    if (wasRunningRef.current && !running && secondsLeft === 0 && total > 0) {
+      if (soundEnabled) {
+        playAlarmSound(alarmSound);
+        alarmStartRef.current = Date.now();
+        setAlarmActive(true);
+        alarmIntervalRef.current = setInterval(() => {
+          const elapsed = Date.now() - alarmStartRef.current;
+          if (elapsed >= 60_000) {
+            clearInterval(alarmIntervalRef.current!);
+            setAlarmActive(false);
+            return;
+          }
+          playAlarmSound(alarmSound);
+        }, 4000);
+      }
+      if (alarmVibrate) {
+        vibrate([200, 100, 200, 100, 200]);
+      }
+    }
+    wasRunningRef.current = running;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ---- timer tick ---- */
   useEffect(() => {
@@ -186,13 +249,11 @@ export function FocusTimer({
 
   /* ---- trigger alarm when timer hits zero ---- */
   useEffect(() => {
-    if (!running && secondsLeft === 0 && total > 0 && !alarmActive) {
+    if (!running && secondsLeft === 0 && total > 0) {
       if (soundEnabled) {
         playAlarmSound(alarmSound);
         alarmStartRef.current = Date.now();
         setAlarmActive(true);
-
-        /* re-play every ~4s for up to 60s, then auto-stop */
         alarmIntervalRef.current = setInterval(() => {
           const elapsed = Date.now() - alarmStartRef.current;
           if (elapsed >= 60_000) {
@@ -207,9 +268,8 @@ export function FocusTimer({
         vibrate([200, 100, 200, 100, 200]);
       }
     }
-  }, [secondsLeft, running, total, soundEnabled, alarmSound, alarmVibrate, alarmActive]);
+  }, [secondsLeft, running, total, soundEnabled, alarmSound, alarmVibrate]);
 
-  /* cleanup alarm interval on unmount */
   useEffect(() => {
     return () => {
       if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current);
@@ -221,17 +281,6 @@ export function FocusTimer({
     setAlarmActive(false);
   };
 
-  const setCustomDuration = (minutes: number) => {
-    update((prev) => ({
-      ...prev,
-      settings: { ...DEFAULT_SETTINGS, ...prev.settings, customTimerMinutes: minutes },
-    }));
-    setTotal(minutes * 60);
-    setSecondsLeft(minutes * 60);
-    setRunning(false);
-    stopAlarm();
-  };
-
   const select = (minutes: number) => {
     setRunning(false);
     stopAlarm();
@@ -239,22 +288,27 @@ export function FocusTimer({
     setSecondsLeft(minutes * 60);
   };
 
-  const addPreset = () => {
-    const minutes = parseInt(newMinutes, 10);
-    if (isNaN(minutes) || minutes <= 0) return;
-    const existing = customPresets.find((p) => p.minutes === minutes);
-    if (existing) {
+  const startCustom = () => {
+    const minutes = Math.min(180, Math.max(1, customMinutes));
+    setTotal(minutes * 60);
+    setSecondsLeft(minutes * 60);
+    setRunning(true);
+    setShowCustomize(false);
+  };
+
+  const saveAsPreset = () => {
+    const minutes = customMinutes;
+    if (minutes <= 0) return;
+    if (customPresets.find((p) => p.minutes === minutes)) {
       select(minutes);
-      setNewMinutes("25");
-      setShowAdd(false);
+      setShowCustomize(false);
       return;
     }
     const preset: TimerPreset = { id: uid(), label: `${minutes}m`, minutes };
     const updated = [...customPresets, preset].sort((a, b) => a.minutes - b.minutes);
     setCustomPresets(updated);
     saveCustomPresets(updated);
-    setNewMinutes("25");
-    setShowAdd(false);
+    setShowCustomize(false);
   };
 
   const removePreset = (id: string) => {
@@ -282,7 +336,7 @@ export function FocusTimer({
           {BUILTINS.map((p) => (
             <SegButton
               key={p.id}
-              active={total === p.minutes * 60}
+              active={total === p.minutes * 60 && !running}
               className="px-2.5 py-1.5 text-[11px] sm:py-1 sm:first:ml-auto"
               onClick={() => select(p.minutes)}
             >
@@ -295,7 +349,7 @@ export function FocusTimer({
               className="scroll-row-item inline-flex items-center gap-0.5 rounded-md bg-muted px-1.5 py-1 text-[11px]"
             >
               <SegButton
-                active={total === p.minutes * 60}
+                active={total === p.minutes * 60 && !running}
                 className="px-2 py-1.5 text-[11px] sm:py-1"
                 onClick={() => select(p.minutes)}
               >
@@ -312,49 +366,51 @@ export function FocusTimer({
             </span>
           ))}
           <SegButton
-            active={false}
+            active={showCustomize}
             className="px-2 py-1.5 text-[11px] sm:py-1"
-            onClick={() => setShowAdd(!showAdd)}
+            onClick={() => setShowCustomize(!showCustomize)}
           >
             <Plus className="mr-0.5 size-3 inline" /> Customize
           </SegButton>
         </ScrollRow>
-        {showAdd && (
-          <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center">
+        {showCustomize && (
+          <div className="space-y-2 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Pick duration</span>
+              <span className="text-xs font-medium tabular-nums text-primary">
+                {customMinutes} min
+              </span>
+            </div>
             <input
-              type="number"
-              placeholder="Minutes"
-              value={newMinutes}
-              onChange={(e) => setNewMinutes(e.target.value)}
+              type="range"
               min={1}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring sm:w-20"
+              max={180}
+              value={customMinutes}
+              onChange={(e) => setCustomMinutes(Number(e.target.value))}
+              className="w-full accent-primary"
             />
-            <Button size="sm" onClick={addPreset}>
-              <Plus className="mr-1 size-3" /> Save
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setShowAdd(false)}>
-              <X className="size-3" />
-            </Button>
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>1 min</span>
+              <span>3 h</span>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" className="tap flex-1" onClick={startCustom}>
+                <Play className="mr-1 size-3" /> Start
+              </Button>
+              <Button size="sm" variant="secondary" className="tap flex-1" onClick={saveAsPreset}>
+                <Plus className="mr-1 size-3" /> Save as preset
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="tap"
+                onClick={() => setShowCustomize(false)}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
           </div>
         )}
-        <div className="px-1 py-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Duration</span>
-            <span className="text-xs font-medium tabular-nums">{customTimerMinutes} min</span>
-          </div>
-          <input
-            type="range"
-            min={1}
-            max={180}
-            value={customTimerMinutes}
-            onChange={(e) => setCustomDuration(Number(e.target.value))}
-            className="mt-1 w-full accent-primary"
-          />
-          <div className="mt-0.5 flex justify-between text-[10px] text-muted-foreground">
-            <span>1 min</span>
-            <span>3 h</span>
-          </div>
-        </div>
         <div className="flex flex-col items-center gap-3 py-2">
           <div className="relative flex size-32 items-center justify-center sm:size-36">
             <svg viewBox="0 0 144 144" className="size-full -rotate-90" aria-hidden>
@@ -408,7 +464,6 @@ export function FocusTimer({
         </div>
       </Panel>
 
-      {/* Stop Alarm overlay — auto-plays for up to 60 s, user clicks to silence */}
       <AlertDialog
         open={alarmActive}
         onOpenChange={(open) => {
