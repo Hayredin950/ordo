@@ -5,7 +5,6 @@ import '../services/auth_provider.dart';
 import '../services/state_provider.dart';
 import '../models/ordo_state.dart';
 import '../themes/app_theme.dart';
-import '../widgets/alarm_settings_sheet.dart';
 import '../screens/about_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -25,7 +24,6 @@ class SettingsScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // ── Profile section ──
               if (auth.isLoggedIn) ...[
                 _ProfileCard(
                   email: auth.user?.email ?? '',
@@ -40,16 +38,19 @@ class SettingsScreen extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: OrdoColors.primary)),
               const SizedBox(height: 12),
-              _SettingsTile(
+              _SettingsRow(
                 icon: Icons.access_time,
                 title: 'Time Format',
                 subtitle: hourFormat == '12h' ? '12-hour (AM/PM)' : '24-hour',
-                onTap: () {
-                  final newFormat = hourFormat == '12h' ? '24h' : '12h';
-                  prov.update((s) => s.copyWith(
-                    settings: Settings(hourFormat: newFormat),
-                  ));
-                },
+                action: Switch(
+                  value: hourFormat == '24h',
+                  onChanged: (_) {
+                    final next = hourFormat == '12h' ? '24h' : '12h';
+                    prov.update((s) => s.copyWith(
+                      settings: Settings(hourFormat: next),
+                    ));
+                  },
+                ),
               ),
               const SizedBox(height: 24),
               const Text('Focus',
@@ -59,13 +60,25 @@ class SettingsScreen extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: OrdoColors.primary)),
               const SizedBox(height: 12),
-              _SettingsTile(
+              _SettingsRow(
                 icon: alarm.enabled ? Icons.alarm : Icons.alarm_off,
                 title: 'Timer Alarm',
-                subtitle: alarm.enabled
-                    ? '${alarm.sound.label}${alarm.vibrate ? ' + vibrate' : ''}'
-                    : 'Off',
-                onTap: () => showAlarmSettingsSheet(context),
+                subtitle: alarm.enabled ? 'Sound when a session ends' : 'Off',
+                action: Switch(
+                  value: alarm.enabled,
+                  onChanged: (_) => alarm.setEnabled(!alarm.enabled),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (alarm.enabled)
+_SettingsRow(
+                icon: Icons.vibration,
+                title: 'Vibrate',
+                subtitle: alarm.vibrate ? 'Vibrate on finish' : 'Off',
+                action: Switch(
+                  value: alarm.vibrate,
+                  onChanged: (_) => alarm.setVibrate(!alarm.vibrate),
+                ),
               ),
               const SizedBox(height: 24),
               const Text('Data',
@@ -75,15 +88,14 @@ class SettingsScreen extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: OrdoColors.primary)),
               const SizedBox(height: 12),
-              _SettingsTile(
+              _ActionRow(
                 icon: Icons.refresh,
                 title: 'Reset All Data',
                 subtitle: 'Restore to default state with sample data',
+                color: OrdoColors.destructive,
                 onTap: () => _showResetDialog(context, prov),
-                destructive: true,
               ),
               const SizedBox(height: 24),
-              // ── About section ──
               const Text('About',
                   style: TextStyle(
                       fontFamily: 'SpaceGrotesk',
@@ -252,25 +264,70 @@ class _AboutTile extends StatelessWidget {
   }
 }
 
-class _SettingsTile extends StatelessWidget {
+class _SettingsRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
-  final bool destructive;
+  final Widget action;
 
-  const _SettingsTile({
+  const _SettingsRow({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.onTap,
-    this.destructive = false,
+    required this.action,
   });
 
   @override
   Widget build(BuildContext context) {
-    final titleColor = destructive ? OrdoColors.destructive : OrdoColors.foreground;
-    final subtitleColor = destructive ? OrdoColors.destructive.withValues(alpha: 0.7) : OrdoColors.mutedForeground;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: OrdoColors.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: OrdoColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: OrdoColors.foreground, size: 22),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: OrdoColors.foreground)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: const TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
+              ],
+            ),
+          ),
+          action,
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -282,7 +339,7 @@ class _SettingsTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, color: titleColor, size: 22),
+            Icon(icon, color: color, size: 22),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -290,17 +347,14 @@ class _SettingsTile extends StatelessWidget {
                 children: [
                   Text(title,
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: titleColor)),
+                          fontWeight: FontWeight.w600, color: color)),
                   const SizedBox(height: 2),
                   Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: subtitleColor)),
+                      style: const TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: OrdoColors.mutedForeground, size: 20),
+            const Icon(Icons.chevron_right, color: OrdoColors.mutedForeground, size: 20),
           ],
         ),
       ),

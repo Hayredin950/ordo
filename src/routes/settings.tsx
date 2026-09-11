@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, settingsOf, type AlarmSound } from "@/lib/ordo";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,21 +108,29 @@ function SettingsPage() {
 
         <main className="mx-auto w-full max-w-2xl flex-1 space-y-7 px-3 py-5 sm:px-5 sm:py-6">
           <Section title="Appearance">
-            <SettingsTile
+            <SettingsRow
               icon={Clock}
               title="Time Format"
               subtitle={hourFormat === "12h" ? "12-hour (AM/PM)" : "24-hour"}
-              onClick={toggleHourFormat}
-            />
+            >
+              <Switch
+                checked={hourFormat === "24h"}
+                onCheckedChange={toggleHourFormat}
+              />
+            </SettingsRow>
           </Section>
 
           <Section title="Focus">
-            <SettingsTile
+            <SettingsRow
               icon={soundEnabled ? AlarmClock : AlarmClockOff}
               title="Timer Alarm"
               subtitle={soundEnabled ? "Sound when a session ends" : "Off"}
-              onClick={toggleSound}
-            />
+            >
+              <Switch
+                checked={soundEnabled}
+                onCheckedChange={toggleSound}
+              />
+            </SettingsRow>
             {soundEnabled && (
               <>
                 <div className="rounded-xl border border-border bg-card p-4">
@@ -152,12 +161,16 @@ function SettingsPage() {
                     ))}
                   </div>
                 </div>
-                <SettingsTile
+                <SettingsRow
                   icon={Vibrate}
                   title="Vibrate"
                   subtitle={alarmVibrate ? "Vibrate on finish" : "Off"}
-                  onClick={toggleVibrate}
-                />
+                >
+                  <Switch
+                    checked={alarmVibrate}
+                    onCheckedChange={toggleVibrate}
+                  />
+                </SettingsRow>
               </>
             )}
           </Section>
@@ -166,29 +179,47 @@ function SettingsPage() {
             title="Data"
             hint="Everything is exportable (JSON, CSV, iCal) from the profile menu. Version history keeps the last 30 snapshots — Undo steps back through them."
           >
-            <SettingsTile
-              icon={RotateCcw}
-              title="Reset All Data"
-              subtitle="Restore to default state with sample data"
+            <button
+              type="button"
               onClick={() => setConfirmReset(true)}
-              destructive
-            />
+              className="flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40"
+            >
+              <RotateCcw className="size-[22px] shrink-0 text-destructive" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-destructive">Reset All Data</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Restore to default state with sample data</p>
+              </div>
+              <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
+            </button>
           </Section>
 
           {user ? (
             <Section title="Account" hint={user.email}>
-              <SettingsTile
-                icon={LogOut}
-                title="Sign Out"
-                subtitle="Your data stays synced to your other devices"
+              <button
+                type="button"
                 onClick={() => void logout()}
-              />
+                className="flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40"
+              >
+                <LogOut className="size-[22px] shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Sign Out</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Your data stays synced to your other devices</p>
+                </div>
+                <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
+              </button>
             </Section>
           ) : null}
 
           <Section title="About">
             <Link to="/about" className="tap">
-              <SettingsTile icon={Info} title="Ordo" subtitle="Personal Accountability App" />
+              <div className="flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40">
+                <Info className="size-[22px] shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Ordo</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Personal Accountability App</p>
+                </div>
+                <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
+              </div>
             </Link>
           </Section>
         </main>
@@ -234,62 +265,28 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 }
 
 /**
- * A row from the Flutter screen: glyph, title, current value, chevron. Rendered
- * as a plain div when there is nothing to tap, so About does not advertise an
- * action it does not have.
+ * A settings row with icon, title, subtitle, and an optional action element
+ * (switch, button, etc.) on the right side.
  */
-function SettingsTile({
+function SettingsRow({
   icon: Icon,
   title,
   subtitle,
-  onClick,
-  disabled = false,
-  destructive = false,
+  children,
 }: {
   icon: LucideIcon;
   title: string;
   subtitle: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  destructive?: boolean;
+  children: React.ReactNode;
 }) {
-  const body = (
-    <>
-      <Icon
-        className={cn("size-[22px] shrink-0", destructive ? "text-destructive" : "text-foreground")}
-      />
-      <div className="min-w-0 flex-1">
-        <p className={cn("truncate text-sm font-semibold", destructive && "text-destructive")}>
-          {title}
-        </p>
-        <p
-          className={cn(
-            "mt-0.5 text-xs",
-            destructive ? "text-destructive/70" : "text-muted-foreground",
-          )}
-        >
-          {subtitle}
-        </p>
-      </div>
-      {onClick ? <ChevronRight className="size-5 shrink-0 text-muted-foreground" /> : null}
-    </>
-  );
-
-  const shell = "flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4";
-  if (!onClick) return <div className={shell}>{body}</div>;
-
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        shell,
-        "tap text-left transition-colors hover:bg-accent/40",
-        disabled && "pointer-events-none opacity-50",
-      )}
-    >
-      {body}
-    </button>
+    <div className="flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4">
+      <Icon className="size-[22px] shrink-0 text-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+      </div>
+      {children}
+    </div>
   );
 }
