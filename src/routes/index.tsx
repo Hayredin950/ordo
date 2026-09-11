@@ -1,12 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
-import {
-  DEFAULT_SETTINGS,
-  hourFormatOf,
-  rangeScore,
-  startOfWeek,
-  type HourFormat,
-} from "@/lib/ordo";
+import { rangeScore, startOfWeek } from "@/lib/ordo";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
 import { useAuth } from "@/lib/auth-context";
 import { undoState, redoState } from "@/lib/db";
@@ -103,14 +97,6 @@ function OrdoApp() {
     }
   };
 
-  const setHourFormat = (hourFormat: HourFormat) => {
-    update((prev) => ({
-      ...prev,
-      settings: { ...DEFAULT_SETTINGS, ...prev.settings, hourFormat },
-    }));
-    toast.success(hourFormat === "24h" ? "Times now show as 24-hour" : "Times now show as AM/PM");
-  };
-
   if (!state) {
     return <div className="min-h-dvh" aria-busy="true" />;
   }
@@ -130,8 +116,6 @@ function OrdoApp() {
         onRedo={() => void redo()}
         onReset={reset}
         onExport={handleExport}
-        hourFormat={hourFormatOf(state)}
-        onHourFormat={setHourFormat}
       >
         <AnnouncementBanner />
         <OnboardingChecklist state={state} />

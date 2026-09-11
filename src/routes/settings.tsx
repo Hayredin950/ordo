@@ -214,7 +214,71 @@ function SettingsPage() {
           ) : null}
 
           <Section title="About">
-            <SettingsTile icon={Info} title="Ordo" subtitle="Personal Accountability App" />
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-card p-5">
+                <div className="flex items-center gap-3">
+                  <img src="/logo-icon.png" alt="Ordo" className="size-10" />
+                  <div>
+                    <p className="font-display text-base font-bold">Ordo</p>
+                    <p className="text-xs text-muted-foreground">Personal Accountability & Goal Tracking</p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  Plan your year down to the hour, log reality, and let the data do the nagging.
+                  Ordo separates what you <em>intended</em> to do from what you <em>actually</em> did,
+                  then visualises the gap with streaks, heatmaps and honest weekly reviews.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4">
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">Key Features</p>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    Goal hierarchy — year, semester, month, week, day
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    Time-block routines with per-day overrides
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    Streaks, consistency heatmap and milestone badges
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    AI-powered weekly reflection and catch-up proposals
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    Telegram &amp; Slack integrations for reminders and check-ins
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    Pair with a friend or join community challenges
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    Future-self letters sealed at goal time
+                  </li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4">
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">Design Philosophy</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  The plan (what should happen) and the log (what did happen) are deliberately
+                  separate objects. Every score, streak, and chart is computed from the log,
+                  never from the plan. When signed out, everything runs locally; signing in
+                  syncs the same document per-user to the cloud.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                <Info className="size-[18px] shrink-0 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">v1.0.0 &middot; Built with TanStack Start, Supabase &amp; Flutter</p>
+              </div>
+            </div>
           </Section>
         </main>
       </div>

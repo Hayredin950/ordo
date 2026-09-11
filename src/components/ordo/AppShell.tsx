@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -12,15 +13,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { ExportKind } from "@/lib/export";
-import type { HourFormat } from "@/lib/ordo";
 import {
   BarChart3,
   Bell,
   CalendarCheck,
   CalendarClock,
   CalendarPlus,
-  Clock,
+  Download,
   FileJson,
   FileSpreadsheet,
   LogIn,
@@ -45,12 +54,6 @@ export const TABS = [
 
 export type TabId = (typeof TABS)[number]["id"];
 
-const EXPORTS = [
-  { kind: "json" as const, label: "Export JSON", Icon: FileJson },
-  { kind: "csv" as const, label: "Export CSV", Icon: FileSpreadsheet },
-  { kind: "ical" as const, label: "Export iCal", Icon: CalendarPlus },
-];
-
 type ShellProps = {
   tab: TabId;
   onTab: (tab: TabId) => void;
@@ -62,9 +65,6 @@ type ShellProps = {
   onRedo: () => void;
   onReset: () => void;
   onExport: (kind: ExportKind) => void;
-  /** Current clock preference, and the one-tap way to flip it. */
-  hourFormat: HourFormat;
-  onHourFormat: (format: HourFormat) => void;
   children: ReactNode;
 };
 
@@ -102,94 +102,131 @@ function AccountMenu({
   onRedo,
   onReset,
   onExport,
-  hourFormat,
-  onHourFormat,
-}: Pick<
-  ShellProps,
-  | "undoBusy"
-  | "onUndo"
-  | "redoBusy"
-  | "onRedo"
-  | "onReset"
-  | "onExport"
-  | "hourFormat"
-  | "onHourFormat"
->) {
+}: Pick<ShellProps, "undoBusy" | "onUndo" | "redoBusy" | "onRedo" | "onReset" | "onExport">) {
   const { user, isAdmin, logout } = useAuth();
+  const [showExport, setShowExport] = useState(false);
   if (!user) return null;
 
   const accountName = user.name || user.email;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="tap rounded-full"
-          aria-label={`Profile menu for ${accountName}`}
-        >
-          {/* The photo when the provider gave us one, the initial when it did
-              not — the Flutter menu only ever has the initial to work with. */}
-          <Avatar className="size-7">
-            <AvatarImage src={user.avatar_url || undefined} alt="" />
-            <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
-              {accountName.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="font-normal">
-          <p className="truncate text-sm font-medium">{accountName}</p>
-          <p className="truncate text-xs text-muted-foreground">signed in with {user.provider}</p>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {isAdmin ? (
-          <>
-            <DropdownMenuItem asChild className="lg:hidden">
-              <Link to="/admin">
-                <Shield /> Admin console
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="lg:hidden" />
-          </>
-        ) : null}
-        <DropdownMenuItem asChild>
-          <Link to="/settings">
-            <SettingsIcon /> Settings
-          </Link>
-        </DropdownMenuItem>
-        {/* The full control lives on the Settings page; this is the shortcut for
-            the one setting people flip while looking at a schedule. */}
-        <DropdownMenuItem onSelect={() => onHourFormat(hourFormat === "24h" ? "12h" : "24h")}>
-          <Clock /> {hourFormat === "24h" ? "Switch to 12-hour (AM/PM)" : "Switch to 24-hour"}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="py-1 text-[11px] font-semibold text-muted-foreground">
-          Export
-        </DropdownMenuLabel>
-        {EXPORTS.map(({ kind, label, Icon }) => (
-          <DropdownMenuItem key={kind} onSelect={() => onExport(kind)}>
-            <Icon /> {label}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="tap rounded-full"
+            aria-label={`Profile menu for ${accountName}`}
+          >
+            <Avatar className="size-7">
+              <AvatarImage src={user.avatar_url || undefined} alt="" />
+              <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
+                {accountName.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel className="font-normal">
+            <p className="truncate text-sm font-medium">{accountName}</p>
+            <p className="truncate text-xs text-muted-foreground">signed in with {user.provider}</p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {isAdmin ? (
+            <>
+              <DropdownMenuItem asChild className="lg:hidden">
+                <Link to="/admin">
+                  <Shield /> Admin console
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="lg:hidden" />
+            </>
+          ) : null}
+          <DropdownMenuItem asChild>
+            <Link to="/settings">
+              <SettingsIcon /> Settings
+            </Link>
           </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator className="lg:hidden" />
-        <DropdownMenuItem className="lg:hidden" disabled={undoBusy} onSelect={onUndo}>
-          <Undo2 /> Undo last change
-        </DropdownMenuItem>
-        <DropdownMenuItem className="lg:hidden" disabled={redoBusy} onSelect={onRedo}>
-          <Redo2 /> Redo last change
-        </DropdownMenuItem>
-        <DropdownMenuItem className="lg:hidden" onSelect={onReset}>
-          <RotateCcw /> Reset my data
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void logout()}>
-          <LogOut /> Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setShowExport(true)}>
+            <Download /> Export
+          </DropdownMenuItem>
+          <DropdownMenuSeparator className="lg:hidden" />
+          <DropdownMenuItem className="lg:hidden" disabled={undoBusy} onSelect={onUndo}>
+            <Undo2 /> Undo last change
+          </DropdownMenuItem>
+          <DropdownMenuItem className="lg:hidden" disabled={redoBusy} onSelect={onRedo}>
+            <Redo2 /> Redo last change
+          </DropdownMenuItem>
+          <DropdownMenuItem className="lg:hidden" onSelect={onReset}>
+            <RotateCcw /> Reset my data
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void logout()}>
+            <LogOut /> Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={showExport} onOpenChange={setShowExport}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Export data</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose a format to download your Ordo data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-2 py-2">
+            <button
+              type="button"
+              onClick={() => {
+                onExport("json");
+                setShowExport(false);
+              }}
+              className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40"
+            >
+              <FileJson className="size-5 shrink-0 text-foreground" />
+              <div>
+                <p className="text-sm font-semibold">JSON</p>
+                <p className="text-xs text-muted-foreground">Full structured backup</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onExport("csv");
+                setShowExport(false);
+              }}
+              className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40"
+            >
+              <FileSpreadsheet className="size-5 shrink-0 text-foreground" />
+              <div>
+                <p className="text-sm font-semibold">CSV</p>
+                <p className="text-xs text-muted-foreground">Spreadsheet-compatible</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onExport("ical");
+                setShowExport(false);
+              }}
+              className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40"
+            >
+              <CalendarPlus className="size-5 shrink-0 text-foreground" />
+              <div>
+                <p className="text-sm font-semibold">iCal</p>
+                <p className="text-xs text-muted-foreground">Calendar import</p>
+              </div>
+            </button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowExport(false)}>Cancel</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -208,8 +245,6 @@ export function AppShell({
   onRedo,
   onReset,
   onExport,
-  hourFormat,
-  onHourFormat,
   children,
 }: ShellProps) {
   const { user, isAdmin, health } = useAuth();
@@ -309,8 +344,6 @@ export function AppShell({
                   onRedo={onRedo}
                   onReset={onReset}
                   onExport={onExport}
-                  hourFormat={hourFormat}
-                  onHourFormat={onHourFormat}
                 />
               </>
             ) : (
