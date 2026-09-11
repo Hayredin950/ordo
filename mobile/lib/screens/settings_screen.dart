@@ -6,6 +6,7 @@ import '../services/state_provider.dart';
 import '../models/ordo_state.dart';
 import '../themes/app_theme.dart';
 import '../widgets/alarm_settings_sheet.dart';
+import '../screens/about_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -90,40 +91,14 @@ class SettingsScreen extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: OrdoColors.primary)),
               const SizedBox(height: 12),
-              _AboutCard(),
-              const SizedBox(height: 16),
-              _versionTile(),
+              _AboutTile(onTap: () {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => const AboutScreen(),
+                ));
+              }),
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _versionTile() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: OrdoColors.card,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrdoColors.border),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, color: OrdoColors.mutedForeground, size: 22),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Ordo', style: TextStyle(fontWeight: FontWeight.w600, color: OrdoColors.foreground)),
-                Text('v1.0.0 · Personal Accountability App',
-                    style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right, color: OrdoColors.mutedForeground, size: 20),
-        ],
       ),
     );
   }
@@ -227,96 +202,51 @@ class _ProfileCard extends StatelessWidget {
   }
 }
 
-class _AboutCard extends StatelessWidget {
-  const _AboutCard();
+class _AboutTile extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _AboutTile({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: OrdoColors.card,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrdoColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // App name and icon
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: OrdoColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.auto_awesome, color: OrdoColors.primary, size: 20),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: OrdoColors.card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: OrdoColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: OrdoColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 12),
-              const Column(
+              child: const Icon(Icons.auto_awesome, color: OrdoColors.primary, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Ordo',
                       style: TextStyle(
                           fontFamily: 'SpaceGrotesk',
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: OrdoColors.foreground)),
                   Text('Personal Accountability & Goal Tracking',
                       style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground)),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(height: 1, color: OrdoColors.border),
-          const SizedBox(height: 12),
-          const Text(
-            'Plan your year down to the hour. Log reality. Let the data do the nagging.',
-            style: TextStyle(fontSize: 13, color: OrdoColors.foreground, height: 1.5),
-          ),
-          const SizedBox(height: 12),
-          const Divider(height: 1, color: OrdoColors.border),
-          const SizedBox(height: 12),
-          const Text('Key Features',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: OrdoColors.mutedForeground,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 8),
-          _featureItem(Icons.calendar_today, 'Goal hierarchy — year to day'),
-          _featureItem(Icons.repeat, 'Time-block routines with overrides'),
-          _featureItem(Icons.auto_stories, 'Streaks, heatmap & badges'),
-          _featureItem(Icons.psychology, 'AI-powered weekly reflection'),
-          _featureItem(Icons.message, 'Telegram & Slack integrations'),
-          _featureItem(Icons.group, 'Challenges & community pairing'),
-          const SizedBox(height: 12),
-          const Divider(height: 1, color: OrdoColors.border),
-          const SizedBox(height: 12),
-          const Text(
-            'The plan (what should happen) and the log (what did happen) are deliberately '
-            'separate. Every score is computed from the log, never the plan.',
-            style: TextStyle(fontSize: 12, color: OrdoColors.mutedForeground, height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _featureItem(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Icon(icon, color: OrdoColors.primary, size: 16),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text,
-                style: const TextStyle(fontSize: 13, color: OrdoColors.foreground)),
-          ),
-        ],
+            ),
+            const Icon(Icons.chevron_right, color: OrdoColors.mutedForeground, size: 20),
+          ],
+        ),
       ),
     );
   }
