@@ -10,6 +10,7 @@ import {
   type OrdoState,
 } from "@/lib/ordo";
 import { categoryColor, useCategories } from "@/lib/categories";
+import { rangeMetrics } from "@/lib/domain";
 import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { apiFetch } from "@/lib/api";
@@ -126,6 +127,14 @@ export function InsightsView({ state }: { state: OrdoState }) {
   const month = rangeScore(state, addDays(new Date(), -29), 30);
   const trend = weekly.at(-1)!.value - weekly.at(-4)!.value;
 
+  // §14: the three headline metrics, computed by the shared definitions —
+  // completion is unweighted, must-do isolates commitments, consistency
+  // rewards steady over spiky.
+  const perf = useMemo(
+    () => rangeMetrics(state, addDays(new Date(), -6), 7),
+    [state],
+  );
+
   const heat = useMemo(() => {
     const days: { key: string; score: number | null }[] = [];
     const start = addDays(startOfWeek(new Date()), -7 * 25);
@@ -150,7 +159,13 @@ export function InsightsView({ state }: { state: OrdoState }) {
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-8">
+        <Stat value={`${perf.completion}%`} label="Completion (7d)" />
+        <Stat value={`${perf.mustDoCompletion}%`} label="Must-do (7d)" />
+        <Stat
+          value={perf.consistency === null ? "—" : `${Math.round(perf.consistency * 100)}%`}
+          label="Consistency (7d)"
+        />
         <Stat value={`${month}%`} label="Last 30 days" />
         <Stat value={`${s.current}d`} label="Current streak" />
         <Stat value={`${s.best}d`} label="Longest streak" />

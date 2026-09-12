@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { DEFAULT_SETTINGS, settingsOf, type AlarmSound } from "@/lib/ordo";
+import { notificationPrefsOf, type NotificationPreferences } from "@/lib/domain";
 import { useOrdoCloud } from "@/lib/ordo-cloud";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -21,11 +22,14 @@ import {
   AlarmClock,
   AlarmClockOff,
   ArrowLeft,
+  BellRing,
   ChevronRight,
   Clock,
   Info,
   LogOut,
+  MoonStar,
   RotateCcw,
+  Timer,
   Volume2,
   Vibrate,
   type LucideIcon,
@@ -89,6 +93,11 @@ function SettingsPage() {
     toast.success(alarmVibrate ? "Vibration off" : "Vibration on");
   };
 
+  /** §5.4: notification channels live on the account, like every other preference. */
+  const notif = notificationPrefsOf(state);
+  const updateNotif = (fn: (p: NotificationPreferences) => NotificationPreferences) =>
+    update((prev) => ({ ...prev, notificationPrefs: fn(notificationPrefsOf(prev)) }));
+
   return (
     <>
       <Toaster />
@@ -113,10 +122,7 @@ function SettingsPage() {
               title="Time Format"
               subtitle={hourFormat === "12h" ? "12-hour (AM/PM)" : "24-hour"}
             >
-              <Switch
-                checked={hourFormat === "24h"}
-                onCheckedChange={toggleHourFormat}
-              />
+              <Switch checked={hourFormat === "24h"} onCheckedChange={toggleHourFormat} />
             </SettingsRow>
           </Section>
 
@@ -126,10 +132,7 @@ function SettingsPage() {
               title="Timer Alarm"
               subtitle={soundEnabled ? "Sound when a session ends" : "Off"}
             >
-              <Switch
-                checked={soundEnabled}
-                onCheckedChange={toggleSound}
-              />
+              <Switch checked={soundEnabled} onCheckedChange={toggleSound} />
             </SettingsRow>
             {soundEnabled && (
               <>
@@ -166,13 +169,169 @@ function SettingsPage() {
                   title="Vibrate"
                   subtitle={alarmVibrate ? "Vibrate on finish" : "Off"}
                 >
-                  <Switch
-                    checked={alarmVibrate}
-                    onCheckedChange={toggleVibrate}
-                  />
+                  <Switch checked={alarmVibrate} onCheckedChange={toggleVibrate} />
                 </SettingsRow>
               </>
             )}
+          </Section>
+
+          <Section
+            title="Notifications"
+            hint="Each channel can be toggled and timed independently. Delivery is scheduled server-side, so reminders fire even with the app closed."
+          >
+            <SettingsRow
+              icon={BellRing}
+              title="Before a block starts"
+              subtitle={
+                notif.channels.routineReminder.enabled
+                  ? `${notif.channels.routineReminder.leadMinutes} min lead time`
+                  : "Off"
+              }
+            >
+              <Switch
+                checked={notif.channels.routineReminder.enabled}
+                onCheckedChange={(v) =>
+                  updateNotif((p) => ({
+                    ...p,
+                    channels: {
+                      ...p.channels,
+                      routineReminder: { ...p.channels.routineReminder, enabled: v },
+                    },
+                  }))
+                }
+              />
+            </SettingsRow>
+            {notif.channels.routineReminder.enabled ? (
+              <ChannelTimeRow
+                label="Lead time"
+                value={String(notif.channels.routineReminder.leadMinutes)}
+                suffix="min"
+                min={1}
+                max={120}
+                onChange={(v) =>
+                  updateNotif((p) => ({
+                    ...p,
+                    channels: {
+                      ...p.channels,
+                      routineReminder: { ...p.channels.routineReminder, leadMinutes: Number(v) },
+                    },
+                  }))
+                }
+              />
+            ) : null}
+
+            <SettingsRow
+              icon={MoonStar}
+              title="Daily close"
+              subtitle={
+                notif.channels.dailyClose.enabled
+                  ? `Reflection + unfinished musts at ${notif.channels.dailyClose.time}`
+                  : "Off"
+              }
+            >
+              <Switch
+                checked={notif.channels.dailyClose.enabled}
+                onCheckedChange={(v) =>
+                  updateNotif((p) => ({
+                    ...p,
+                    channels: {
+                      ...p.channels,
+                      dailyClose: { ...p.channels.dailyClose, enabled: v },
+                    },
+                  }))
+                }
+              />
+            </SettingsRow>
+            {notif.channels.dailyClose.enabled ? (
+              <ChannelTimeRow
+                label="Time"
+                value={notif.channels.dailyClose.time}
+                type="time"
+                onChange={(v) =>
+                  updateNotif((p) => ({
+                    ...p,
+                    channels: {
+                      ...p.channels,
+                      dailyClose: { ...p.channels.dailyClose, time: String(v) },
+                    },
+                  }))
+                }
+              />
+            ) : null}
+
+            <SettingsRow
+              icon={Timer}
+              title="Streak at risk"
+              subtitle={
+                notif.channels.streakAtRisk.enabled
+                  ? `Nudge at ${notif.channels.streakAtRisk.time} if nothing is logged`
+                  : "Off"
+              }
+            >
+              <Switch
+                checked={notif.channels.streakAtRisk.enabled}
+                onCheckedChange={(v) =>
+                  updateNotif((p) => ({
+                    ...p,
+                    channels: {
+                      ...p.channels,
+                      streakAtRisk: { ...p.channels.streakAtRisk, enabled: v },
+                    },
+                  }))
+                }
+              />
+            </SettingsRow>
+
+            <SettingsRow
+              icon={BellRing}
+              title="Quiet hours"
+              subtitle={
+                notif.quietHours.enabled
+                  ? `No notifications ${notif.quietHours.start} – ${notif.quietHours.end}`
+                  : "Off"
+              }
+            >
+              <Switch
+                checked={notif.quietHours.enabled}
+                onCheckedChange={(v) =>
+                  updateNotif((p) => ({ ...p, quietHours: { ...p.quietHours, enabled: v } }))
+                }
+              />
+            </SettingsRow>
+            {notif.quietHours.enabled ? (
+              <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card p-4">
+                <label className="space-y-1.5 text-xs text-muted-foreground">
+                  From
+                  <input
+                    type="time"
+                    value={notif.quietHours.start}
+                    aria-label="Quiet hours start"
+                    onChange={(e) =>
+                      updateNotif((p) => ({
+                        ...p,
+                        quietHours: { ...p.quietHours, start: e.target.value },
+                      }))
+                    }
+                    className="block w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
+                  />
+                </label>
+                <label className="space-y-1.5 text-xs text-muted-foreground">
+                  Until
+                  <input
+                    type="time"
+                    value={notif.quietHours.end}
+                    aria-label="Quiet hours end"
+                    onChange={(e) =>
+                      updateNotif((p) => ({
+                        ...p,
+                        quietHours: { ...p.quietHours, end: e.target.value },
+                      }))
+                    }
+                    className="block w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
+                  />
+                </label>
+              </div>
+            ) : null}
           </Section>
 
           <Section
@@ -187,7 +346,9 @@ function SettingsPage() {
               <RotateCcw className="size-[22px] shrink-0 text-destructive" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-destructive">Reset All Data</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Restore to default state with sample data</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Restore to default state with sample data
+                </p>
               </div>
               <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
             </button>
@@ -203,7 +364,9 @@ function SettingsPage() {
                 <LogOut className="size-[22px] shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">Sign Out</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Your data stays synced to your other devices</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Your data stays synced to your other devices
+                  </p>
                 </div>
                 <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
               </button>
@@ -216,7 +379,9 @@ function SettingsPage() {
                 <Info className="size-[22px] shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">Ordo</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Personal Accountability App</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Personal Accountability App
+                  </p>
                 </div>
                 <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
               </div>
@@ -287,6 +452,43 @@ function SettingsRow({
         <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
       </div>
       {children}
+    </div>
+  );
+}
+
+/** Inline numeric/time editor used by the notification channels (§5.4). */
+function ChannelTimeRow({
+  label,
+  value,
+  onChange,
+  type = "number",
+  min,
+  max,
+  suffix,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: number | string) => void;
+  type?: "number" | "time";
+  min?: number;
+  max?: number;
+  suffix?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
+      <div className="min-w-0 flex-1 text-sm text-muted-foreground">{label}</div>
+      <input
+        type={type}
+        value={value}
+        min={min}
+        max={max}
+        aria-label={label}
+        onChange={(e) =>
+          onChange(type === "number" ? Number(e.target.value) || min || 1 : e.target.value)
+        }
+        className="w-24 rounded-md border border-input bg-background px-2 py-1.5 text-sm tabular-nums text-foreground"
+      />
+      {suffix ? <span className="text-xs text-muted-foreground">{suffix}</span> : null}
     </div>
   );
 }

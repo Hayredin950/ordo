@@ -7,12 +7,20 @@ import {
   formatTime,
   hourFormatOf,
   newBlock,
-  newId,
   startOfWeek,
   type Block,
   type CategoryId,
   type OrdoState,
 } from "@/lib/ordo";
+import {
+  applyRoutineSource,
+  applyTemplateToDays,
+  deleteTemplate,
+  saveTemplate,
+  templateBlockCount,
+  templateDayCount,
+  templateDays,
+} from "@/lib/domain";
 import { categoryColor, useCategories } from "@/lib/categories";
 import { CategoryPill, Panel, PanelTitle, SegButton } from "./primitives";
 import { Button } from "@/components/ui/button";
@@ -39,6 +47,9 @@ export function RoutineView({
   const [templateName, setTemplateName] = useState("");
   const [rangeDays, setRangeDays] = useState(30);
   const [publishing, setPublishing] = useState(false);
+  const [dupTargets, setDupTargets] = useState<number[]>([]);
+  const [dupMode, setDupMode] = useState<"replace" | "merge">("replace");
+  const [tplDays, setTplDays] = useState<number[]>([new Date().getDay()]);
 
   const publishDay = async () => {
     if (!user) {
@@ -72,12 +83,6 @@ export function RoutineView({
 
   const patch = (id: string, p: Partial<Block>) =>
     setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, ...p } : b)));
-
-  const copyTo = (target: number) =>
-    update((prev) => ({
-      ...prev,
-      routine: { ...prev.routine, [target]: cloneBlocks(prev.routine[dayIdx] ?? []) },
-    }));
 
   const applyWeekdays = () =>
     update((prev) => {
@@ -205,25 +210,81 @@ export function RoutineView({
         <Panel>
           <PanelTitle
             title="Duplicate this day"
-            hint={`Copy ${DAYS[dayIdx]}'s schedule elsewhere.`}
+            hint={`Copy ${DAYS[dayIdx]}'s schedule to other days in one action.`}
           />
-          <div className="mb-3 grid grid-cols-3 gap-1 sm:flex sm:flex-wrap">
+          <div
+            className="mb-2 grid grid-cols-3 gap-1 sm:flex sm:flex-wrap"
+            role="group"
+            aria-label="Target days"
+          >
             {DAYS.map((d, i) =>
               i === dayIdx ? null : (
-                <button
+                <label
                   key={d}
-                  type="button"
-                  onClick={() => {
-                    copyTo(i);
-                    toast.success(`Copied to ${d}`);
-                  }}
-                  className="tap rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground hover:bg-accent sm:py-1.5"
+                  className={`tap flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-2 text-sm sm:py-1.5 ${
+                    dupTargets.includes(i)
+                      ? "bg-primary/10 text-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent"
+                  }`}
                 >
-                  <Copy className="mr-1 inline size-3.5" />
+                  <input
+                    type="checkbox"
+                    className="accent-primary"
+                    checked={dupTargets.includes(i)}
+                    onChange={(e) =>
+                      setDupTargets((prev) =>
+                        e.target.checked ? [...prev, i] : prev.filter((x) => x !== i),
+                      )
+                    }
+                  />
                   {d}
-                </button>
+                </label>
               ),
             )}
+          </div>
+          {dupTargets.length > 0 && dupMode === "replace" ? (
+            <p className="mb-2 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+              {dupTargets
+                .filter((i) => (state.routine[i] ?? []).length > 0)
+                .map((i) => DAYS[i])
+                .join(", ") || "No days"}{" "}
+              {dupTargets.filter((i) => (state.routine[i] ?? []).length > 0).length === 1
+                ? "already has blocks — they will be replaced."
+                : "already have blocks — they will be replaced."}
+            </p>
+          ) : null}
+          <div className="mb-3 flex items-center justify-between gap-2 text-sm">
+            <label className="flex cursor-pointer items-center gap-2 text-muted-foreground">
+              <input
+                type="checkbox"
+                className="accent-primary"
+                checked={dupMode === "merge"}
+                onChange={(e) => setDupMode(e.target.checked ? "merge" : "replace")}
+              />
+              Merge instead of replace
+            </label>
+            <Button
+              size="sm"
+              className="tap"
+              disabled={!dupTargets.length || !(state.routine[dayIdx] ?? []).length}
+              onClick={() => {
+                const names = dupTargets.map((i) => DAYS[i]).join(", ");
+                update(
+                  (prev) =>
+                    applyRoutineSource(
+                      prev,
+                      { kind: "day", dayOfWeek: dayIdx },
+                      dupTargets,
+                      dupMode,
+                    ).state,
+                );
+                setDupTargets([]);
+                toast.success(`Copied to ${names}`);
+              }}
+            >
+              <Copy className="size-4" /> Copy to {dupTargets.length || 0} day
+              {dupTargets.length === 1 ? "" : "s"}
+            </Button>
           </div>
           <Button
             variant="secondary"
@@ -263,33 +324,27 @@ export function RoutineView({
         <Panel>
           <PanelTitle
             title="Template library"
-            hint="Save any day, reuse it any time — or share it."
+            hint="Snapshot any set of days, reapply them any time — or share one."
           />
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={templateName}
               placeholder="e.g. Exam week"
               onChange={(e) => setTemplateName(e.target.value)}
+              aria-label="Template name"
             />
             <div className="flex gap-2">
               <Button
                 size="sm"
                 className="tap flex-1 sm:flex-none"
+                disabled={!templateName.trim() || !tplDays.length}
                 onClick={() => {
                   if (!templateName.trim()) return;
-                  update((prev) => ({
-                    ...prev,
-                    templates: [
-                      ...prev.templates,
-                      {
-                        id: newId(),
-                        name: templateName.trim(),
-                        blocks: cloneBlocks(prev.routine[dayIdx] ?? []),
-                      },
-                    ],
-                  }));
+                  update((prev) => saveTemplate(prev, templateName.trim(), tplDays).state);
                   setTemplateName("");
-                  toast.success("Template saved");
+                  toast.success(
+                    `Template saved (${tplDays.length} day${tplDays.length === 1 ? "" : "s"})`,
+                  );
                 }}
               >
                 <Save className="size-4" />
@@ -306,32 +361,97 @@ export function RoutineView({
               </Button>
             </div>
           </div>
-          <div className="mt-3 space-y-2">
-            {state.templates.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm"
+          <div
+            className="mt-2 flex flex-wrap gap-1"
+            role="group"
+            aria-label="Days to include in template"
+          >
+            {DAYS.map((d, i) => (
+              <label
+                key={d}
+                className={`tap cursor-pointer rounded-md px-2.5 py-1 text-xs ${
+                  tplDays.includes(i)
+                    ? "bg-primary/10 text-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent"
+                }`}
               >
-                <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {t.blocks.length} blocks
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="tap shrink-0"
-                  onClick={() => {
-                    update((prev) => ({
-                      ...prev,
-                      routine: { ...prev.routine, [dayIdx]: cloneBlocks(t.blocks) },
-                    }));
-                    toast.success(`Applied “${t.name}” to ${DAYS[dayIdx]}`);
-                  }}
-                >
-                  Apply
-                </Button>
-              </div>
+                <input
+                  type="checkbox"
+                  className="mr-1 accent-primary"
+                  checked={tplDays.includes(i)}
+                  onChange={(e) =>
+                    setTplDays((prev) =>
+                      e.target.checked ? [...prev, i] : prev.filter((x) => x !== i),
+                    )
+                  }
+                />
+                {d}
+              </label>
             ))}
+          </div>
+          <div className="mt-3 space-y-2">
+            {state.templates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No templates saved yet.</p>
+            ) : null}
+            {state.templates.map((t) => {
+              const dayCount = templateDayCount(t);
+              const blocks = templateBlockCount(t);
+              return (
+                <div
+                  key={t.id}
+                  className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm"
+                >
+                  <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {dayCount > 0 ? `${dayCount} day${dayCount === 1 ? "" : "s"} · ` : ""}
+                    {blocks} blocks
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="tap shrink-0"
+                    onClick={() => {
+                      const targets = dayCount > 0 ? [] : [dayIdx];
+                      const willReplace = (
+                        dayCount > 0
+                          ? Object.keys(templateDays(t))
+                              .map(Number)
+                              .filter((d) => d >= 0)
+                          : targets
+                      ).some((d) => (state.routine[d] ?? []).length > 0);
+                      if (
+                        willReplace &&
+                        !confirm(
+                          `Apply “${t.name}”? Existing blocks on the target days will be replaced.`,
+                        )
+                      ) {
+                        return;
+                      }
+                      update((prev) => applyTemplateToDays(prev, t.id, targets, "replace").state);
+                      toast.success(
+                        dayCount > 0
+                          ? `Applied “${t.name}” to its saved days`
+                          : `Applied “${t.name}” to ${DAYS[dayIdx]}`,
+                      );
+                    }}
+                  >
+                    Apply
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tap shrink-0"
+                    aria-label={`Delete template ${t.name}`}
+                    onClick={() => {
+                      update((prev) => deleteTemplate(prev, t.id));
+                      toast.success(`Deleted “${t.name}”`);
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </Panel>
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { BUILTIN_CATEGORIES, type Category, type CategoryId } from "./categories";
+import { streakDays, weightedDayScore } from "./domain";
 
 /**
  * Re-exported so the dozen modules that already import `CategoryId` from here
@@ -100,12 +101,19 @@ export type OrdoState = {
   /** 0 = Sunday .. 6 = Saturday */
   routine: Record<number, Block[]>;
   overrides: Record<string, Block[]>;
-  templates: { id: string; name: string; blocks: Block[] }[];
+  /** Legacy templates are flat block snapshots; new ones are day-scoped (see lib/domain.ts). */
+  templates: { id: string; name: string; blocks?: Block[]; days?: Record<number, Block[]> }[];
   goals: Goal[];
   log: LogMap;
   journal: Record<string, string>;
   /** Absent in documents written before preferences existed. */
   settings?: Settings;
+  /** Redesign v3 domains — all optional so pre-redesign documents load unchanged. */
+  tasks?: import("./domain").Task[];
+  debtEvents?: import("./domain").DebtEvent[];
+  logEntries?: import("./domain").LogEntry[];
+  notificationPrefs?: import("./domain").NotificationPreferences;
+  focusSessions?: import("./domain").FocusSession[];
 };
 
 export const dateKey = (d: Date) =>
@@ -256,11 +264,7 @@ export function blocksFor(state: OrdoState, d: Date): Block[] {
 }
 
 export function dayScore(state: OrdoState, d: Date): number | null {
-  const blocks = blocksFor(state, d);
-  if (!blocks.length) return null;
-  const entries = state.log[dateKey(d)] ?? {};
-  const total = blocks.reduce((sum, blk) => sum + (entries[blk.id] ?? 0), 0);
-  return Math.round(total / blocks.length);
+  return weightedDayScore(state.log[dateKey(d)] ?? {}, blocksFor(state, d));
 }
 
 export function rangeScore(state: OrdoState, from: Date, days: number): number {
@@ -277,20 +281,7 @@ export function rangeScore(state: OrdoState, from: Date, days: number): number {
 }
 
 export function streak(state: OrdoState, threshold = 70): { current: number; best: number } {
-  let current = 0;
-  let best = 0;
-  let run = 0;
-  for (let i = 120; i >= 0; i--) {
-    const s = dayScore(state, addDays(new Date(), -i));
-    if (s !== null && s >= threshold) {
-      run++;
-      best = Math.max(best, run);
-    } else if (s !== null) {
-      run = 0;
-    }
-    if (i === 0 || run > 0) current = run;
-  }
-  return { current, best };
+  return streakDays(state, threshold);
 }
 
 /**

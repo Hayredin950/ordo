@@ -4,14 +4,16 @@ import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Play, Pause, RotateCcw, Timer, Plus, X } from "lucide-react";
-import { settingsOf, type AlarmSound, type OrdoState } from "@/lib/ordo";
+import { Play, Pause, RotateCcw, Timer, Plus, X, Link2 } from "lucide-react";
+import { dateKey, settingsOf, type AlarmSound, type OrdoState } from "@/lib/ordo";
+import { reconcileDebtForDate } from "@/lib/domain";
 
 /* ------------------------------------------------------------------ */
 /*  Alarm sound generators (Web Audio API – no asset files needed)     */
@@ -111,11 +113,18 @@ function vibrate(pattern: number[]) {
 /*  Timer persistence (survives tab switches)                          */
 /* ------------------------------------------------------------------ */
 
+/** §5.5: the block or task a session is "for" — a chip, not a mode switch. */
+export type LinkedItem = { id: string; title: string; type: "routine" | "task" };
+
+/** A contextual start coming from a Today timeline row (§5.5 entry point 1). */
+export type FocusStartRequest = { linked: LinkedItem; minutes: number; nonce: number };
+
 interface TimerSnapshot {
   total: number;
   secondsLeft: number;
   running: boolean;
   savedAt: number;
+  linked?: LinkedItem;
 }
 
 const TIMER_KEY = "ordo.focus-timer.v1";
@@ -182,7 +191,16 @@ const BUILTINS: TimerPreset[] = [
   { id: "short", label: "Short", minutes: 15 },
 ];
 
-export function FocusTimer({ state }: { state: OrdoState | null }) {
+export function FocusTimer({
+  state,
+  update,
+  startRequest,
+}: {
+  state: OrdoState | null;
+  /** Present whenever the timer is mounted inside a view that can log completions. */
+  update?: (fn: (s: OrdoState) => OrdoState) => void;
+  startRequest?: FocusStartRequest | null;
+}) {
   const settings = settingsOf(state);
   const { soundEnabled, alarmSound, alarmVibrate } = settings;
 
@@ -190,6 +208,8 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
   const [total, setTotal] = useState(initial.total);
   const [secondsLeft, setSecondsLeft] = useState(initial.secondsLeft);
   const [running, setRunning] = useState(initial.running);
+  const [linked, setLinked] = useState<LinkedItem | undefined>(initial.linked);
+  const [justFinished, setJustFinished] = useState<LinkedItem | null>(null);
   const [customPresets, setCustomPresets] = useState<TimerPreset[]>(loadCustomPresets);
   const [showCustomize, setShowCustomize] = useState(false);
   const [customMinutes, setCustomMinutes] = useState(25);
@@ -201,8 +221,26 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
 
   /* ---- persist timer on every change ---- */
   useEffect(() => {
-    saveTimer({ total, secondsLeft, running, savedAt: Date.now() });
-  }, [total, secondsLeft, running]);
+    const snap: TimerSnapshot = {
+      total,
+      secondsLeft,
+      running,
+      savedAt: Date.now(),
+    };
+    if (linked) snap.linked = linked;
+    saveTimer(snap);
+  }, [total, secondsLeft, running, linked]);
+
+  /* ---- contextual start from a Today row (§5.5) ---- */
+  useEffect(() => {
+    if (!startRequest) return;
+    stopAlarm();
+    setTotal(startRequest.minutes * 60);
+    setSecondsLeft(startRequest.minutes * 60);
+    setLinked(startRequest.linked);
+    setRunning(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startRequest?.nonce]);
 
   /* ---- trigger alarm if timer finished while user was away ---- */
   useEffect(() => {
@@ -250,6 +288,8 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
   /* ---- trigger alarm when timer hits zero ---- */
   useEffect(() => {
     if (!running && secondsLeft === 0 && total > 0) {
+      // §5.5: a session that ran to zero is offerable to the linked item.
+      if (linked) setJustFinished(linked);
       if (soundEnabled) {
         playAlarmSound(alarmSound);
         alarmStartRef.current = Date.now();
@@ -268,7 +308,27 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
         vibrate([200, 100, 200, 100, 200]);
       }
     }
-  }, [secondsLeft, running, total, soundEnabled, alarmSound, alarmVibrate]);
+  }, [secondsLeft, running, total, linked, soundEnabled, alarmSound, alarmVibrate]);
+
+  /** §5.5: one tap feeds the linked block/task's completion control (100%). */
+  const logToLinked = () => {
+    const item = justFinished;
+    if (!item || !update) return;
+    const key = dateKey(new Date());
+    update((prev) =>
+      reconcileDebtForDate(
+        {
+          ...prev,
+          log: { ...prev.log, [key]: { ...(prev.log[key] ?? {}), [item.id]: 100 } },
+        },
+        new Date(),
+      ),
+    );
+    setJustFinished(null);
+    setLinked(undefined);
+    setTotal(DEFAULT_TOTAL);
+    setSecondsLeft(DEFAULT_TOTAL);
+  };
 
   useEffect(() => {
     return () => {
@@ -332,6 +392,14 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
         <p className="text-xs text-muted-foreground px-1">
           One block at a time — the timer is the task.
         </p>
+        {linked ? (
+          <div className="mb-2 flex items-center justify-center gap-1.5 px-1">
+            <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary">
+              <Link2 className="size-3 shrink-0" />
+              <span className="truncate">{linked.title}</span>
+            </span>
+          </div>
+        ) : null}
         <ScrollRow>
           {BUILTINS.map((p) => (
             <SegButton
@@ -453,6 +521,7 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
                 setRunning(false);
                 stopAlarm();
                 setSecondsLeft(total);
+                setLinked(undefined);
               }}
             >
               <RotateCcw className="mr-1 size-4" /> Reset
@@ -465,20 +534,43 @@ export function FocusTimer({ state }: { state: OrdoState | null }) {
       </Panel>
 
       <AlertDialog
-        open={alarmActive}
+        open={alarmActive || justFinished !== null}
         onOpenChange={(open) => {
-          if (!open) stopAlarm();
+          if (!open) {
+            stopAlarm();
+            setJustFinished(null);
+          }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Timer finished</AlertDialogTitle>
+            <AlertDialogTitle>
+              {justFinished ? "Focus session complete" : "Timer finished"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              The alarm will stop on its own in under a minute, or tap below to silence it now.
+              {justFinished
+                ? `${Math.round(total / 60)} minutes · ${justFinished.title}`
+                : "The alarm will stop on its own in under a minute, or tap below to silence it now."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={stopAlarm}>Stop Alarm</AlertDialogAction>
+            {justFinished && update ? (
+              <>
+                <AlertDialogCancel
+                  onClick={() => {
+                    setJustFinished(null);
+                    setLinked(undefined);
+                  }}
+                >
+                  Done
+                </AlertDialogCancel>
+                <AlertDialogAction onClick={logToLinked}>
+                  Log to {justFinished.title}
+                </AlertDialogAction>
+              </>
+            ) : (
+              <AlertDialogAction onClick={stopAlarm}>Stop Alarm</AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

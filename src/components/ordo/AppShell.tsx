@@ -42,10 +42,12 @@ import {
   Redo2,
   Undo2,
   Users,
+  CalendarDays,
 } from "lucide-react";
 
 export const TABS = [
   { id: "Today", icon: CalendarCheck },
+  { id: "Planner", icon: CalendarDays },
   { id: "Routine", icon: CalendarClock },
   { id: "Goals", icon: Target },
   { id: "Insights", icon: BarChart3 },
@@ -379,7 +381,7 @@ export function AppShell({
         aria-label="Sections"
         className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/95 backdrop-blur-md lg:hidden"
       >
-        <div className="mx-auto grid max-w-md grid-cols-5">
+        <div className="mx-auto grid max-w-md grid-cols-6">
           {TABS.map(({ id, icon: Icon }) => {
             const active = tab === id;
             return (

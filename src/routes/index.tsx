@@ -7,6 +7,7 @@ import { undoState, redoState } from "@/lib/db";
 import { downloadExport, type ExportKind } from "@/lib/export";
 import { AppShell, type TabId } from "@/components/ordo/AppShell";
 import { TodayView } from "@/components/ordo/TodayView";
+import { PlannerView } from "@/components/ordo/PlannerView";
 import { RoutineView } from "@/components/ordo/RoutineView";
 import { GoalsView } from "@/components/ordo/GoalsView";
 import { InsightsView } from "@/components/ordo/InsightsView";
@@ -120,6 +121,7 @@ function OrdoApp() {
         <AnnouncementBanner />
         <OnboardingChecklist state={state} />
         {tab === "Today" ? <TodayView state={state} update={update} /> : null}
+        {tab === "Planner" ? <PlannerView state={state} update={update} /> : null}
         {tab === "Routine" ? <RoutineView state={state} update={update} /> : null}
         {tab === "Goals" ? <GoalsView state={state} update={update} /> : null}
         {tab === "Insights" ? <InsightsView state={state} /> : null}

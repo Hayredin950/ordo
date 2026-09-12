@@ -11,12 +11,14 @@ import {
   type OrdoState,
 } from "@/lib/ordo";
 import { CategoryPill, Panel, PanelTitle, Ring, Stat } from "./primitives";
+import { reconcileDebtForDate, tasksForDate, debtBalance } from "@/lib/domain";
+import type { LinkedItem } from "./FocusTimer";
+import { FocusTimer } from "./FocusTimer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Flame, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame, AlertTriangle, Play, MoonStar } from "lucide-react";
 import { toast } from "sonner";
 import { TelegramPanel } from "./TelegramPanel";
-import { FocusTimer } from "./FocusTimer";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
 
@@ -31,9 +33,15 @@ export function TodayView({
 }) {
   const { user } = useAuth();
   const [offset, setOffset] = useState(0);
+  const [focusReq, setFocusReq] = useState<{
+    linked: LinkedItem;
+    minutes: number;
+    nonce: number;
+  } | null>(null);
   const day = addDays(new Date(), offset);
   const key = dateKey(day);
   const blocks = blocksFor(state, day);
+  const dayTasks = tasksForDate(state, day).filter((t) => t.status !== "cancelled");
   const entries = state.log[key] ?? {};
   const score = dayScore(state, day) ?? 0;
   const s = useMemo(() => streak(state), [state]);
@@ -56,10 +64,19 @@ export function TodayView({
   };
 
   const setPct = (blockId: string, pct: number) =>
-    update((prev) => ({
-      ...prev,
-      log: { ...prev.log, [key]: { ...(prev.log[key] ?? {}), [blockId]: pct } },
-    }));
+    update((prev) => {
+      // One atomic transition: the log entry plus the debt-ledger
+      // reconciliation it implies (§9.4) — never a computed field drifting.
+      const next = {
+        ...prev,
+        log: { ...prev.log, [key]: { ...(prev.log[key] ?? {}), [blockId]: pct } },
+      };
+      return reconcileDebtForDate(next, day);
+    });
+
+  /** §5.5 entry point 1: start a focus session attached to this item. */
+  const startFocus = (item: LinkedItem, minutes = 25) =>
+    setFocusReq((prev) => ({ linked: item, minutes, nonce: (prev?.nonce ?? 0) + 1 }));
 
   return (
     <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.6fr_1fr]">
@@ -138,11 +155,21 @@ export function TodayView({
                 </div>
                 {/* Full-width segmented control on a phone (each target ≥44px),
                     a compact inline group once there is room beside the title. */}
-                <div
-                  className="mt-3 grid grid-cols-5 gap-1 sm:mt-0 sm:flex sm:shrink-0"
-                  role="group"
-                  aria-label={`Completion for ${blk.title}`}
-                >
+                <div className="flex items-center gap-1 sm:order-last">
+                  <button
+                    type="button"
+                    aria-label={`Focus on ${blk.title}`}
+                    title="Focus on this block"
+                    onClick={() => startFocus({ id: blk.id, title: blk.title, type: "routine" })}
+                    className="tap flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground hover:bg-accent sm:size-7 sm:px-2"
+                  >
+                    <Play className="size-3.5" />
+                  </button>
+                  <div
+                    className="grid flex-1 grid-cols-5 gap-1 sm:flex sm:shrink-0"
+                    role="group"
+                    aria-label={`Completion for ${blk.title}`}
+                  >
                   {STEPS.map((v) => (
                     <button
                       key={v}
@@ -158,11 +185,87 @@ export function TodayView({
                       {v}
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {dayTasks.length > 0 ? (
+          <div className="mt-4 space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Scheduled tasks
+            </p>
+            {dayTasks.map((t) => {
+              const pct = entries[t.id] ?? 0;
+              const done = t.status === "done" || pct >= 100;
+              return (
+                <div
+                  key={t.id}
+                  className={`rounded-lg border p-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3 ${
+                    done ? "border-primary/30 bg-primary/5" : "border-border bg-background/40"
+                  }`}
+                >
+                  <div className="font-display text-sm tabular-nums text-muted-foreground sm:w-24 sm:shrink-0">
+                    {t.scheduledStart
+                      ? formatTimeRange(
+                          t.scheduledStart,
+                          t.scheduledEnd ?? t.scheduledStart,
+                          hourFormat,
+                        )
+                      : "Any time"}
+                  </div>
+                  <div className="mt-1 min-w-0 sm:mt-0 sm:flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className={done ? "line-through opacity-60" : ""}>{t.title}</span>
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        task
+                      </span>
+                      {t.priority === "must" ? (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          must
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label={`Focus on ${t.title}`}
+                      title="Focus on this task"
+                      onClick={() => startFocus({ id: t.id, title: t.title, type: "task" })}
+                      className="tap flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground hover:bg-accent sm:size-7 sm:px-2"
+                    >
+                      <Play className="size-3.5" />
+                    </button>
+                    <div
+                      className="grid grid-cols-5 gap-1 sm:flex sm:shrink-0"
+                      role="group"
+                      aria-label={`Completion for ${t.title}`}
+                    >
+                      {STEPS.map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          aria-pressed={pct === v}
+                          onClick={() => setPct(t.id, v)}
+                          className={`tap h-10 rounded-md text-xs font-medium transition-colors sm:h-7 sm:px-2 ${
+                            pct === v
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:bg-accent"
+                          }`}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
 
         <div className="mt-5">
           <PanelTitle
@@ -199,8 +302,11 @@ export function TodayView({
             value={`${blocks.filter((x) => (entries[x.id] ?? 0) >= 100).length}/${blocks.length}`}
             label="Blocks cleared"
           />
-          <Stat value={`${debt.length}`} label="Missed-task debt" />
+          {/* §9.4: the balance comes from the append-only ledger, not a recount. */}
+          <Stat value={`${debtBalance(state)}`} label="Open debt" />
         </div>
+
+        <DailyClose state={state} onLog={setPct} />
 
         <Panel>
           <PanelTitle
@@ -234,8 +340,82 @@ export function TodayView({
 
         <TelegramPanel hourFormat={hourFormat} />
 
-        <FocusTimer state={state} />
+        <FocusTimer state={state} update={update} startRequest={focusReq} />
       </div>
     </div>
+  );
+}
+
+/**
+ * §5.7 Daily Close — a UI composition, not a new domain. Surfaces unfinished
+ * must items, tomorrow's preview and the reflection in one place so the
+ * end-of-day ritual is a single pass instead of three notifications.
+ */
+function DailyClose({
+  state,
+  onLog,
+}: {
+  state: OrdoState;
+  onLog: (blockId: string, pct: number) => void;
+}) {
+  const today = new Date();
+  const key = dateKey(today);
+  const blocks = blocksFor(state, today);
+  const entries = state.log[key] ?? {};
+  const unfinished = blocks.filter((b) => (entries[b.id] ?? 0) < 100);
+  const tomorrow = blocksFor(state, addDays(today, 1));
+
+  if (unfinished.length === 0 && tomorrow.length === 0) return null;
+
+  return (
+    <Panel>
+      <PanelTitle
+        title="Daily close"
+        hint="Finish the day in one pass — log what's left, peek at tomorrow."
+      />
+      {unfinished.length > 0 ? (
+        <div className="space-y-1.5">
+          {unfinished.map((b) => (
+            <div key={b.id} className="flex items-center gap-2 text-sm">
+              <MoonStar className="size-3.5 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1 truncate">
+                {b.title}
+                {b.priority === "must" ? (
+                  <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                    must
+                  </span>
+                ) : null}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="tap shrink-0"
+                onClick={() => onLog(b.id, 100)}
+              >
+                Log done
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Everything logged. Nothing left to close out.
+        </p>
+      )}
+      {tomorrow.length > 0 ? (
+        <div className="mt-3 border-t border-border pt-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Tomorrow · {tomorrow.length} blocks
+          </p>
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {tomorrow
+              .slice(0, 3)
+              .map((b) => b.title)
+              .join(", ")}
+            {tomorrow.length > 3 ? ` +${tomorrow.length - 3} more` : ""}
+          </p>
+        </div>
+      ) : null}
+    </Panel>
   );
 }
